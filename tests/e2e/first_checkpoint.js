@@ -1,0 +1,155 @@
+const { chromium } = require('playwright');
+
+const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
+const username = process.env.GLPI_USER || 'glpi';
+const password = process.env.GLPI_PASSWORD || 'glpi';
+
+async function selectValue(page, name, value, label) {
+  const selector = `select[name="${name}"]`;
+  await page.locator(selector).evaluate((element, option) => {
+    const value = String(option.value);
+    if (![...element.options].some(item => item.value === value)) {
+      element.add(new Option(option.label, value));
+    }
+    element.value = value;
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }, { value, label });
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  });
+  const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
+  const browserErrors = [];
+
+  page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`));
+  page.on('console', message => {
+    if (message.type() === 'error') {
+      browserErrors.push(`console: ${message.text()}`);
+    }
+  });
+
+  await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await page.fill('input[name="login_name"]', username);
+  await page.fill('input[name="login_password"]', password);
+  await page.click('button[type="submit"], input[type="submit"]');
+  await page.waitForLoadState('networkidle');
+
+  const listResponse = await page.goto(
+    `${baseUrl}/plugins/patchpanel/front/panel.php`,
+    { waitUntil: 'networkidle' }
+  );
+  const listBody = await page.locator('body').innerText();
+
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
+    waitUntil: 'networkidle',
+  });
+  const panelName = `PP-V2-E2E-${Date.now()}`;
+  await page.fill('input[name="name"]', panelName);
+  await page.fill('input[name="port_count"]', '24');
+  await selectValue(page, 'rows', 1, '1');
+  await selectValue(page, 'media', 'copper', 'Copper');
+  await page.locator('button[name="add"], input[name="add"]').click();
+  await page.waitForLoadState('networkidle');
+
+  const panelUrl = page.url();
+  const panelId = Number(new URL(panelUrl).searchParams.get('id'));
+  if (!panelId) {
+    throw new Error(`Panel creation did not redirect to a valid ID: ${panelUrl}`);
+  }
+
+  const visualTab = page.locator('a, button').filter({ hasText: /Visual panel/i }).first();
+  if (await visualTab.count()) {
+    await visualTab.click();
+    await page.locator('.patchpanel-port').first().waitFor({ state: 'visible' });
+  }
+
+  const visualBody = await page.locator('body').innerText();
+  const portTiles = page.locator('.patchpanel-port');
+  const portCount = await portTiles.count();
+  await page.screenshot({
+    path: 'artifacts/patchpanel-v2-first-visual.png',
+    fullPage: true,
+  });
+
+  await portTiles.first().click();
+  await page.waitForLoadState('networkidle');
+  const portUrl = page.url();
+  const portId = Number(new URL(portUrl).searchParams.get('id'));
+  if (!portId) {
+    throw new Error(`Port tile did not lead to a valid port: ${portUrl}`);
+  }
+
+  await selectValue(page, 'rear_items_id', 88, 'Kamer 0102 Wall outlet');
+  await selectValue(page, 'front_items_id', 226, 'SW-L1-IDF-A - Port 02');
+  await selectValue(page, 'rear_cable_color', '#0d6efd', 'Blue');
+  await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
+  await page.fill('input[name="front_cable_label"]', 'CP-V2-E2E');
+  await page.locator('button[name="update"], input[name="update"]').click();
+  await page.waitForLoadState('networkidle');
+  await page.locator('.patchpanel-route').waitFor({ state: 'visible' });
+
+  const routeBody = await page.locator('body').innerText();
+  const routeLinks = await page.locator('.patchpanel-route-step[href]').count();
+  await page.screenshot({
+    path: 'artifacts/patchpanel-v2-first-route.png',
+    fullPage: true,
+  });
+
+  const result = {
+    list_status: listResponse.status(),
+    list_loaded: listBody.includes('Patch panels'),
+    legacy_notice: visualBody.includes('4 panels') && visualBody.includes('72 ports'),
+    panel_id: panelId,
+    port_id: portId,
+    visual_port_count: portCount,
+    route: {
+      terminal: routeBody.includes('TV 002'),
+      socket: routeBody.includes('Kamer 0102 Wall outlet'),
+      panel: routeBody.includes(panelName),
+      access_switch: routeBody.includes('SW-L1-IDF-A'),
+      core_switch: routeBody.includes('SW-L1-MDF-CORE-01'),
+      firewall_router: routeBody.includes('FW-L1-MDF-01'),
+      clickable_steps: routeLinks,
+    },
+    unexpected_error: routeBody.includes('An unexpected error occurred'),
+    browser_errors: browserErrors,
+  };
+
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
+    waitUntil: 'networkidle',
+  });
+  const csrfToken = await page.locator('input[name="_glpi_csrf_token"]').last().inputValue();
+  const cleanupResponse = await page.request.post(
+    `${baseUrl}/plugins/patchpanel/front/panel.form.php`,
+    {
+      form: {
+        id: String(panelId),
+        purge: '1',
+        _glpi_csrf_token: csrfToken,
+      },
+      maxRedirects: 0,
+    }
+  );
+  result.cleanup_status = cleanupResponse.status();
+  console.log(JSON.stringify(result, null, 2));
+
+  await browser.close();
+
+  const routeComplete = Object.entries(result.route)
+    .filter(([key]) => key !== 'clickable_steps')
+    .every(([, value]) => value === true);
+  if (
+    result.list_status !== 200
+    || result.visual_port_count !== 24
+    || !routeComplete
+    || result.route.clickable_steps < 7
+    || result.unexpected_error
+    || result.browser_errors.length
+    || ![200, 302, 303].includes(result.cleanup_status)
+  ) {
+    process.exitCode = 1;
+  }
+})();

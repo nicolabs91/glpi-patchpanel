@@ -1,0 +1,9 @@
+{
+  "name": "nicolabs91/glpi-patchpanel",
+  "description": "Visual physical network routes for GLPI",
+  "type": "glpi-plugin",
+  "license": "GPL-3.0-or-later",
+  "require": {
+    "php": ">=8.2"
+  }
+}
