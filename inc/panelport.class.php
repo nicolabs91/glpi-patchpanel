@@ -22,6 +22,17 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         ];
     }
 
+    public static function getOperationalStateOptions(bool $includeEmpty = false): array
+    {
+        $options = [
+            'active' => __('Active'),
+            'reserved' => __('Reserved', 'patchpanel'),
+            'fault' => __('Fault', 'patchpanel'),
+            'disabled' => __('Out of service', 'patchpanel'),
+        ];
+        return $includeEmpty ? ['' => __('Keep current value', 'patchpanel')] + $options : $options;
+    }
+
     public static function normalizeMedia(string $media): string
     {
         return array_key_exists($media, self::getMediaOptions()) ? $media : 'other';
@@ -207,6 +218,133 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             echo '</a>';
         }
         echo '</div>';
+
+        if ($panel->canUpdateItem()) {
+            self::showBulkForm($panel);
+        }
+    }
+
+    private static function showBulkForm(PluginPatchpanelPanel $panel): void
+    {
+        global $CFG_GLPI;
+
+        $count = (int) $panel->fields['port_count'];
+        echo "<section class='patchpanel-bulk card mt-3'>";
+        echo "<div class='card-header'><h2 class='card-title mb-0'>" .
+            htmlescape(__('Bulk port management', 'patchpanel')) . '</h2></div>';
+        echo "<div class='card-body'>";
+        echo "<p class='text-muted'>" .
+            htmlescape(__('Update a continuous port range in one transaction. Existing endpoint connections are preserved.', 'patchpanel')) .
+            '</p>';
+        echo "<form method='post' action='" .
+            htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panelport.bulk.php') . "'>";
+        echo Html::hidden('plugin_patchpanel_panels_id', ['value' => $panel->getID()]);
+        echo "<div class='row g-3'>";
+        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('From port', 'patchpanel')) . '</label>';
+        echo Html::input('from_port', ['type' => 'number', 'value' => 1, 'min' => 1, 'max' => $count]);
+        echo '</div>';
+        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('To port', 'patchpanel')) . '</label>';
+        echo Html::input('to_port', ['type' => 'number', 'value' => $count, 'min' => 1, 'max' => $count]);
+        echo '</div>';
+        echo "<div class='col-md-4'><label class='form-label'>" . htmlescape(__('Label pattern', 'patchpanel')) . '</label>';
+        echo Html::input('label_pattern', [
+            'value' => '',
+            'placeholder' => 'Patch port {n:02}',
+        ]);
+        echo "<div class='form-text'>" .
+            htmlescape(__('Use {n} or {n:02}; leave empty to keep labels.', 'patchpanel')) .
+            '</div></div>';
+        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('Operational state', 'patchpanel')) . '</label>';
+        Dropdown::showFromArray('operational_state', self::getOperationalStateOptions(true), ['value' => '']);
+        echo '</div>';
+        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('Media', 'patchpanel')) . '</label>';
+        Dropdown::showFromArray('media', ['' => __('Keep current value', 'patchpanel')] + self::getMediaOptions(), ['value' => '']);
+        echo '</div></div>';
+        echo "<div class='mt-3'><button class='btn btn-primary' type='submit' name='bulk_update' value='1'>";
+        echo "<i class='ti ti-edit'></i> " . htmlescape(__('Update port range', 'patchpanel'));
+        echo '</button></div>';
+        Html::closeForm();
+        echo '</div></section>';
+    }
+
+    public static function bulkUpdate(int $panelId, array $input): int
+    {
+        global $DB;
+
+        $panel = new PluginPatchpanelPanel();
+        $panel->check($panelId, UPDATE);
+
+        $from = (int) ($input['from_port'] ?? 0);
+        $to = (int) ($input['to_port'] ?? 0);
+        $max = (int) $panel->fields['port_count'];
+        if ($from < 1 || $to < $from || $to > $max) {
+            throw new InvalidArgumentException(__('Invalid port range', 'patchpanel'));
+        }
+
+        $pattern = trim((string) ($input['label_pattern'] ?? ''));
+        $state = (string) ($input['operational_state'] ?? '');
+        $media = (string) ($input['media'] ?? '');
+        if ($state !== '' && !array_key_exists($state, self::getOperationalStateOptions())) {
+            throw new InvalidArgumentException(__('Invalid operational state', 'patchpanel'));
+        }
+        if ($media !== '' && !array_key_exists($media, self::getMediaOptions())) {
+            throw new InvalidArgumentException(__('Invalid media type', 'patchpanel'));
+        }
+        if ($pattern === '' && $state === '' && $media === '') {
+            throw new InvalidArgumentException(__('Choose at least one value to update.', 'patchpanel'));
+        }
+        if ($pattern !== '' && !str_contains($pattern, '{n}')) {
+            if (!str_contains($pattern, '{n:02}')) {
+                throw new InvalidArgumentException(__('Label pattern must contain {n} or {n:02}.', 'patchpanel'));
+            }
+        }
+
+        $rows = [];
+        foreach ($DB->request([
+            'SELECT' => ['id', 'number'],
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'plugin_patchpanel_panels_id' => $panelId,
+                'number' => ['>=', $from],
+                [
+                    'number' => ['<=', $to],
+                ],
+            ],
+            'ORDER' => ['number ASC'],
+        ]) as $row) {
+            $rows[] = $row;
+        }
+        if (count($rows) !== ($to - $from + 1)) {
+            throw new RuntimeException(__('One or more ports in the selected range are missing.', 'patchpanel'));
+        }
+
+        $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+        $DB->beginTransaction();
+        try {
+            foreach ($rows as $row) {
+                $values = ['date_mod' => $now];
+                $number = (int) $row['number'];
+                if ($pattern !== '') {
+                    $values['label'] = str_replace(
+                        ['{n:02}', '{n}'],
+                        [str_pad((string) $number, 2, '0', STR_PAD_LEFT), (string) $number],
+                        $pattern
+                    );
+                }
+                if ($state !== '') {
+                    $values['operational_state'] = $state;
+                }
+                if ($media !== '') {
+                    $values['media'] = $media;
+                }
+                $DB->update(self::getTable(), $values, ['id' => $row['id']]);
+            }
+            $DB->commit();
+            return count($rows);
+        } catch (Throwable $e) {
+            $DB->rollBack();
+            throw $e;
+        }
     }
 
     public function getDisplayStatus(): string
@@ -260,12 +398,9 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         echo '</td></tr>';
 
         echo "<tr class='tab_bg_1'><td>" . __('Operational state', 'patchpanel') . "</td><td>";
-        Dropdown::showFromArray('operational_state', [
-            'active' => __('Active'),
-            'reserved' => __('Reserved', 'patchpanel'),
-            'fault' => __('Fault', 'patchpanel'),
-            'disabled' => __('Out of service', 'patchpanel'),
-        ], ['value' => $this->fields['operational_state'] ?? 'active']);
+        Dropdown::showFromArray('operational_state', self::getOperationalStateOptions(), [
+            'value' => $this->fields['operational_state'] ?? 'active',
+        ]);
         echo '</td><td>' . __('Media', 'patchpanel') . '</td><td>';
         Dropdown::showFromArray('media', self::getMediaOptions(), [
             'value' => $this->fields['media'] ?? 'copper',

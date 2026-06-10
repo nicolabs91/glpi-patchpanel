@@ -7,3 +7,5 @@
 - Added transaction-safe endpoint updates and database uniqueness constraints.
 - Added clickable physical routes through GLPI network ports to router/firewall.
 - Preserved all old PatchPanel tables as non-destructive migration input.
+- Added editable panel models with explicit model application rules.
+- Added transaction-safe bulk labels, operational state, and media updates.

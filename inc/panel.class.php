@@ -50,6 +50,7 @@ class PluginPatchpanelPanel extends CommonDBTM
 
     public function prepareInputForAdd($input): array|false
     {
+        $input = $this->applySelectedModel($input, true);
         $input['port_count'] = max(1, min(512, (int) ($input['port_count'] ?? 24)));
         $input['rows'] = max(1, min(8, (int) ($input['rows'] ?? 1)));
         $input['media'] = PluginPatchpanelPanelPort::normalizeMedia($input['media'] ?? 'copper');
@@ -58,6 +59,7 @@ class PluginPatchpanelPanel extends CommonDBTM
 
     public function prepareInputForUpdate($input): array|false
     {
+        $input = $this->applySelectedModel($input, false);
         if (isset($input['port_count'])) {
             $input['port_count'] = max(1, min(512, (int) $input['port_count']));
             if (!$this->canReduceTo((int) $input['port_count'])) {
@@ -76,6 +78,29 @@ class PluginPatchpanelPanel extends CommonDBTM
             $input['media'] = PluginPatchpanelPanelPort::normalizeMedia($input['media']);
         }
         return parent::prepareInputForUpdate($input);
+    }
+
+    private function applySelectedModel(array $input, bool $isNew): array
+    {
+        $modelId = (int) ($input['plugin_patchpanel_panelmodels_id'] ?? 0);
+        $apply = $isNew || !empty($input['apply_model']);
+        unset($input['apply_model']);
+
+        if (!$apply || $modelId <= 0) {
+            return $input;
+        }
+
+        $definition = PluginPatchpanelPanelModel::getDefinition($modelId);
+        if ($definition === null) {
+            Session::addMessageAfterRedirect(
+                __('The selected patch panel model does not exist.', 'patchpanel'),
+                false,
+                ERROR
+            );
+            return $input;
+        }
+
+        return array_merge($input, $definition);
     }
 
     private function canReduceTo(int $portCount): bool
@@ -157,6 +182,23 @@ class PluginPatchpanelPanel extends CommonDBTM
             'max' => 512,
         ]);
         echo '</td></tr>';
+
+        if (!$this->isNewID($ID)) {
+            echo "<tr class='tab_bg_1'><td>" . __('Apply model layout', 'patchpanel') . "</td><td colspan='3'>";
+            echo Html::hidden('apply_model', ['value' => 0]);
+            echo "<label class='form-check'>";
+            echo "<input class='form-check-input' type='checkbox' name='apply_model' value='1'>";
+            echo "<span class='form-check-label'>" .
+                htmlescape(__('Replace port count, rows and media with the selected model when saving.', 'patchpanel')) .
+                '</span></label>';
+            echo '</td></tr>';
+        } else {
+            echo "<tr class='tab_bg_1'><td colspan='4'><div class='alert alert-info mb-0'>";
+            echo htmlescape(
+                __('For a new panel, selecting a model automatically sets port count, rows and media. You can leave the model empty for a custom layout.', 'patchpanel')
+            );
+            echo '</div></td></tr>';
+        }
 
         echo "<tr class='tab_bg_1'><td>" . __('Rows', 'patchpanel') . "</td><td>";
         Dropdown::showNumber('rows', [

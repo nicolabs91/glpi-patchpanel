@@ -114,16 +114,57 @@ SQL,
         global $DB;
 
         $table = 'glpi_plugin_patchpanel_panelmodels';
+        $oldFiber = $DB->request([
+            'SELECT' => ['id'],
+            'FROM' => $table,
+            'WHERE' => ['name' => '24-port fiber, 1U'],
+            'LIMIT' => 1,
+        ])->current();
+        $newFiber = $DB->request([
+            'SELECT' => ['id'],
+            'FROM' => $table,
+            'WHERE' => ['name' => '24-port multimode fiber, 1U'],
+            'LIMIT' => 1,
+        ])->current();
+        if ($oldFiber && $newFiber) {
+            if ($DB->tableExists('glpi_plugin_patchpanel_panels')) {
+                $DB->update('glpi_plugin_patchpanel_panels', [
+                    'plugin_patchpanel_panelmodels_id' => (int) $newFiber['id'],
+                ], [
+                    'plugin_patchpanel_panelmodels_id' => (int) $oldFiber['id'],
+                ]);
+            }
+            $DB->delete($table, ['id' => (int) $oldFiber['id']]);
+        } elseif ($oldFiber) {
+            $DB->update($table, [
+                'name' => '24-port multimode fiber, 1U',
+                'media' => 'fiber-mm',
+            ], ['id' => (int) $oldFiber['id']]);
+        }
+
         foreach ([
             ['name' => '24-port copper, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'copper'],
             ['name' => '48-port copper, 2U', 'port_count' => 48, 'rows' => 2, 'media' => 'copper'],
-            ['name' => '24-port fiber, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'fiber'],
+            ['name' => '24-port multimode fiber, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'fiber-mm'],
         ] as $model) {
-            if (countElementsInTable($table, ['name' => $model['name']]) === 0) {
+            $existing = $DB->request([
+                'SELECT' => ['id'],
+                'FROM' => $table,
+                'WHERE' => ['name' => $model['name']],
+                'LIMIT' => 1,
+            ])->current();
+            if (!$existing) {
                 $model['date_creation'] = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
                 $DB->insert($table, $model);
+            } else {
+                $DB->update($table, [
+                    'port_count' => $model['port_count'],
+                    'rows' => $model['rows'],
+                    'media' => $model['media'],
+                ], ['id' => $existing['id']]);
             }
         }
+
     }
 
     public static function getLegacySummary(): array

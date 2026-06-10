@@ -16,5 +16,10 @@ Version `0.1.0-dev` is the first vertical checkpoint. It includes the new
 schema, panel and port creation, endpoint uniqueness rules, visual statuses,
 cable colors, reverse tabs, and route navigation.
 
+The second checkpoint adds managed panel models and transaction-safe bulk
+updates for a continuous port range. Selecting a model on a new panel applies
+its port count, rows, and media. Existing panels require the explicit
+`Apply model layout` checkbox, preventing accidental layout replacement.
+
 The previous PatchPanel tables are treated as read-only legacy input. Installing
 or uninstalling this version does not remove them.

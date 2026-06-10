@@ -132,6 +132,11 @@
     color: var(--tblr-secondary);
 }
 
+.patchpanel-bulk .select2-container,
+.patchpanel-bulk input {
+    width: 100% !important;
+}
+
 @media (max-width: 768px) {
     .patchpanel-grid {
         grid-template-columns: repeat(var(--patchpanel-columns), 4.3rem);
