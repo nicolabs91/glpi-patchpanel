@@ -174,7 +174,13 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 $legacy['panels'],
                 $legacy['ports']
             );
-            echo '</span></div>';
+            echo '</span>';
+            if (Session::haveRight('networking', UPDATE)) {
+                echo "<a class='btn btn-sm btn-outline-primary ms-auto' href='" .
+                    htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/migration.php') . "'>";
+                echo htmlescape(__('Open migration preview', 'patchpanel')) . '</a>';
+            }
+            echo '</div>';
         }
 
         echo "<div class='patchpanel-legend' aria-label='" . htmlescape(__('Status legend', 'patchpanel')) . "'>";

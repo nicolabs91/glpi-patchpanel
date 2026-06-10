@@ -9,3 +9,5 @@
 - Preserved all old PatchPanel tables as non-destructive migration input.
 - Added editable panel models with explicit model application rules.
 - Added transaction-safe bulk labels, operational state, and media updates.
+- Added read-only legacy analysis, conflict-aware import, migration reports,
+  idempotent mapping records, and batch rollback.

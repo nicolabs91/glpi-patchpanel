@@ -137,6 +137,18 @@
     width: 100% !important;
 }
 
+.patchpanel-migration details[open] {
+    min-width: 70rem;
+}
+
+.patchpanel-migration summary {
+    list-style: none;
+}
+
+.patchpanel-migration summary::-webkit-details-marker {
+    display: none;
+}
+
 @media (max-width: 768px) {
     .patchpanel-grid {
         grid-template-columns: repeat(var(--patchpanel-columns), 4.3rem);

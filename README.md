@@ -23,3 +23,11 @@ its port count, rows, and media. Existing panels require the explicit
 
 The previous PatchPanel tables are treated as read-only legacy input. Installing
 or uninstalling this version does not remove them.
+
+## Legacy migration
+
+The migration page performs a read-only analysis first. It derives the new
+front side from the connected infrastructure port, imports valid sides only,
+marks duplicate or ambiguous endpoints as conflicts, and records every created
+panel and port in a rollback batch. Rollback removes only records created by
+that batch and never changes the legacy tables.

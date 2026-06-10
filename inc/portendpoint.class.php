@@ -103,7 +103,11 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         return $condition;
     }
 
-    public static function saveForPort(int $portId, array $input): bool
+    public static function saveForPort(
+        int $portId,
+        array $input,
+        bool $manageTransaction = true
+    ): bool
     {
         global $DB;
 
@@ -127,15 +131,21 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             ],
         ];
 
-        $DB->beginTransaction();
+        if ($manageTransaction) {
+            $DB->beginTransaction();
+        }
         try {
             foreach ($desired as $side => $endpoint) {
                 self::saveSide($portId, $side, $endpoint);
             }
-            $DB->commit();
+            if ($manageTransaction) {
+                $DB->commit();
+            }
             return true;
         } catch (Throwable $e) {
-            $DB->rollBack();
+            if ($manageTransaction) {
+                $DB->rollBack();
+            }
             Toolbox::logInFile(
                 'php-errors',
                 'PatchPanel endpoint update failed: ' . $e->getMessage() . "\n"
