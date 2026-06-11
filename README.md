@@ -24,6 +24,10 @@ its port count, rows, and media. Existing panels require the explicit
 The previous PatchPanel tables are treated as read-only legacy input. Installing
 or uninstalling this version does not remove them.
 
+The quality checkpoint adds an entity-aware overview for free, incomplete,
+connected, broken, disabled, and faulty ports. Results can be filtered by
+status or text and link directly to the affected panel port and physical route.
+
 ## Legacy migration
 
 The migration page performs a read-only analysis first. It derives the new

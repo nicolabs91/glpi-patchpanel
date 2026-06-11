@@ -2,6 +2,8 @@
 
 include '../../../inc/includes.php';
 
+global $CFG_GLPI;
+
 Session::checkRight('networking', UPDATE);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_selected'])) {

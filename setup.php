@@ -22,6 +22,7 @@ function plugin_init_patchpanel(): void
         ))),
     ]);
     Plugin::registerClass('PluginPatchpanelRoute');
+    Plugin::registerClass('PluginPatchpanelQuality');
     Plugin::registerClass('PluginPatchpanelMigration');
 
     if (!in_array('PluginPatchpanelPanel', $CFG_GLPI['rackable_types'] ?? [], true)) {

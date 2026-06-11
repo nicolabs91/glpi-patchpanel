@@ -11,3 +11,5 @@
 - Added transaction-safe bulk labels, operational state, and media updates.
 - Added read-only legacy analysis, conflict-aware import, migration reports,
   idempotent mapping records, and batch rollback.
+- Added an entity-aware cabling quality and free-port dashboard with status and
+  text filters plus direct links to panel ports and routes.

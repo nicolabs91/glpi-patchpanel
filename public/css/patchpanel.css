@@ -101,6 +101,52 @@
     --patchpanel-status-color: #343a40;
 }
 
+.patchpanel-status-fault {
+    --patchpanel-status-color: #d63384;
+}
+
+.patchpanel-quality-cards {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.patchpanel-quality-card {
+    align-items: center;
+    background: var(--tblr-bg-surface);
+    border: 2px solid var(--patchpanel-status-color);
+    border-radius: .6rem;
+    color: var(--tblr-body-color);
+    display: grid;
+    gap: .25rem .5rem;
+    grid-template-columns: auto 1fr;
+    padding: .75rem;
+    text-decoration: none;
+}
+
+.patchpanel-quality-card strong {
+    font-size: 1.5rem;
+    grid-column: 1 / -1;
+}
+
+.patchpanel-quality-card-active {
+    background: color-mix(in srgb, var(--patchpanel-status-color) 12%, var(--tblr-bg-surface));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--patchpanel-status-color) 30%, transparent);
+}
+
+.patchpanel-quality-status {
+    align-items: center;
+    border-left: .3rem solid var(--patchpanel-status-color);
+    display: inline-flex;
+    gap: .35rem;
+    padding-left: .5rem;
+}
+
+.patchpanel-quality .select2-container,
+.patchpanel-quality input {
+    width: 100% !important;
+}
+
 .patchpanel-route-section {
     margin: 1.5rem auto;
     max-width: 1400px;
