@@ -211,9 +211,58 @@
     display: none;
 }
 
+.patchpanel-label-sheet {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.patchpanel-label {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: 8px;
+    padding: 12px;
+    break-inside: avoid;
+    background: var(--tblr-bg-surface);
+}
+
+.patchpanel-label img {
+    width: 92px;
+    height: 92px;
+}
+
+.patchpanel-label-port {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
 @media (max-width: 768px) {
     .patchpanel-grid {
         grid-template-columns: repeat(var(--patchpanel-columns), 4.3rem);
+    }
+}
+
+@media print {
+    .patchpanel-label-controls,
+    header,
+    nav,
+    footer,
+    .page-header {
+        display: none !important;
+    }
+
+    .patchpanel-label-sheet {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6mm;
+    }
+
+    .patchpanel-label {
+        color: #000;
+        background: #fff;
+        border-color: #000;
     }
 }
 

@@ -197,6 +197,24 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         }
         echo '</div>';
 
+        echo "<div class='d-flex justify-content-end mb-3'>";
+        echo "<a class='btn btn-outline-secondary me-2' href='" .
+            htmlescape(
+                $CFG_GLPI['root_doc'] .
+                '/plugins/patchpanel/front/audit.php?panel_id=' .
+                (int) $panel->getID()
+            ) . "'>";
+        echo "<i class='ti ti-history'></i> " .
+            htmlescape(__('Audit history', 'patchpanel')) . '</a>';
+        echo "<a class='btn btn-outline-primary' href='" .
+            htmlescape(
+                $CFG_GLPI['root_doc'] .
+                '/plugins/patchpanel/front/labels.php?panel_id=' .
+                (int) $panel->getID()
+            ) . "'>";
+        echo "<i class='ti ti-qrcode'></i> " .
+            htmlescape(__('Print QR labels', 'patchpanel')) . '</a></div>';
+
         $columns = (int) ceil(
             (int) $panel->fields['port_count'] / max(1, (int) $panel->fields['rows'])
         );
@@ -324,6 +342,11 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             throw new RuntimeException(__('One or more ports in the selected range are missing.', 'patchpanel'));
         }
 
+        $before = [];
+        foreach ($rows as $row) {
+            $before[(int) $row['id']] = PluginPatchpanelCsvImport::snapshot((int) $row['id']);
+        }
+
         $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
         $DB->beginTransaction();
         try {
@@ -344,6 +367,15 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                     $values['media'] = $media;
                 }
                 $DB->update(self::getTable(), $values, ['id' => $row['id']]);
+                PluginPatchpanelAudit::record(
+                    $panelId,
+                    (int) $row['id'],
+                    'update',
+                    'bulk',
+                    sprintf(__('Bulk-updated port %d', 'patchpanel'), $number),
+                    $before[(int) $row['id']],
+                    PluginPatchpanelCsvImport::snapshot((int) $row['id'])
+                );
             }
             $DB->commit();
             return count($rows);

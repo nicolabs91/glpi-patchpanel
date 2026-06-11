@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-dev
+## 0.1.0 - 2026-06-11
 
 - Rebuilt the plugin around panels, panel ports, and explicit front/rear endpoints.
 - Added a visual, accessible panel grid with status and cable-color separation.
@@ -17,3 +17,5 @@
   canonical, clickable physical route representation.
 - Added CSV upload preview, endpoint and duplicate validation, transaction-safe
   bulk linking, immutable before/after snapshots, and guarded batch rollback.
+- Added native GLPI rack placement and printable panel-port QR label sheets.
+- Added panel audit history for manual, bulk, CSV, and migration changes.

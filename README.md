@@ -10,11 +10,12 @@ The main view is a visual panel. Every registered object in a physical route is
 clickable, and upstream GLPI network-port links are followed toward the nearest
 router or firewall.
 
-## Development status
+## Release status
 
-Version `0.1.0-dev` is the first vertical checkpoint. It includes the new
+Version `0.1.0` targets GLPI 11 and PHP 8.2 or newer. It includes the new
 schema, panel and port creation, endpoint uniqueness rules, visual statuses,
-cable colors, reverse tabs, and route navigation.
+cable colors, reverse tabs, route navigation, quality checks, impact analysis,
+recoverable imports, QR labels, rack placement, and audit history.
 
 The second checkpoint adds managed panel models and transaction-safe bulk
 updates for a continuous port range. Selecting a model on a new panel applies
@@ -38,6 +39,14 @@ media value, duplicate, and existing assignment is validated before the apply
 button appears. Applying is one database transaction and creates a rollback
 batch; rollback is refused if an imported port was changed afterward.
 
+Patch panels participate in GLPI's native rack placement. Printable labels can
+be generated for any continuous port range; each label includes the panel,
+port, location, and a QR code that opens the exact panel port in GLPI.
+
+Route-affecting manual edits, bulk changes, CSV imports and rollbacks, and
+legacy migrations are recorded in an immutable panel audit view with the
+responsible user and machine-readable before/after snapshots.
+
 ## Legacy migration
 
 The migration page performs a read-only analysis first. It derives the new
@@ -45,3 +54,26 @@ front side from the connected infrastructure port, imports valid sides only,
 marks duplicate or ambiguous endpoints as conflicts, and records every created
 panel and port in a rollback batch. Rollback removes only records created by
 that batch and never changes the legacy tables.
+
+## Installation and upgrade
+
+Back up the GLPI database and the existing plugin directory before installing
+or upgrading. Copy this directory to `plugins/patchpanel`, then run:
+
+```console
+php bin/console plugin:install patchpanel
+php bin/console plugin:activate patchpanel
+```
+
+For an upgrade, use `plugin:install --force patchpanel` to run additive schema
+updates before activating the plugin. The installer never removes the legacy
+PatchPanel tables. Plugin uninstall removes only the replacement plugin's own
+tables; use a database backup when historical audit or rollback data must be
+retained.
+
+## Verification
+
+The browser checkpoints in `tests/e2e` cover panel creation and visual routes,
+models and bulk transactions, migration and rollback, quality and free-port
+search, route impact analysis, CSV import and guarded rollback, rack/QR labels,
+and audit history.

@@ -98,6 +98,25 @@ CREATE TABLE `glpi_plugin_patchpanel_migrations` (
   UNIQUE KEY `source` (`source_table`,`source_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL,
+            'glpi_plugin_patchpanel_audits' => <<<'SQL'
+CREATE TABLE `glpi_plugin_patchpanel_audits` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `event_uuid` varchar(64) NOT NULL,
+  `plugin_patchpanel_panels_id` int unsigned NOT NULL,
+  `plugin_patchpanel_panelports_id` int unsigned NOT NULL DEFAULT 0,
+  `users_id` int unsigned NOT NULL DEFAULT 0,
+  `action` varchar(32) NOT NULL,
+  `source` varchar(32) NOT NULL,
+  `summary` varchar(255) NOT NULL,
+  `before_json` longtext DEFAULT NULL,
+  `after_json` longtext DEFAULT NULL,
+  `date_creation` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `event_uuid` (`event_uuid`),
+  KEY `panel_date` (`plugin_patchpanel_panels_id`,`date_creation`),
+  KEY `port_date` (`plugin_patchpanel_panelports_id`,`date_creation`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
             'glpi_plugin_patchpanel_importbatches' => <<<'SQL'
 CREATE TABLE `glpi_plugin_patchpanel_importbatches` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
@@ -603,6 +622,18 @@ SQL,
                             throw new RuntimeException(__('Could not create an imported endpoint.', 'patchpanel'));
                         }
                     }
+                    PluginPatchpanelAudit::record(
+                        $targetPanelId,
+                        (int) $targetPort['id'],
+                        'create',
+                        'legacy_migration',
+                        sprintf(
+                            __('Imported legacy port %d', 'patchpanel'),
+                            $legacyPort['number']
+                        ),
+                        [],
+                        PluginPatchpanelCsvImport::snapshot((int) $targetPort['id'])
+                    );
 
                     $mappingStatus = match ($legacyPort['status']) {
                         'ready' => 'imported',

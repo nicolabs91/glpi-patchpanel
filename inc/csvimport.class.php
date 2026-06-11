@@ -391,6 +391,17 @@ final class PluginPatchpanelCsvImport
                     'after_json' => json_encode($after, JSON_THROW_ON_ERROR),
                     'date_creation' => $now,
                 ]);
+                $port = new PluginPatchpanelPanelPort();
+                $port->getFromDB($portId);
+                PluginPatchpanelAudit::record(
+                    (int) $port->fields['plugin_patchpanel_panels_id'],
+                    $portId,
+                    'update',
+                    'csv_import',
+                    sprintf(__('Imported CSV line %d', 'patchpanel'), $row['line']),
+                    $before,
+                    $after
+                );
             }
             $DB->commit();
             return ['batch_uuid' => $batch, 'row_count' => count($analysis['rows'])];
@@ -449,6 +460,7 @@ final class PluginPatchpanelCsvImport
                 $port = new PluginPatchpanelPanelPort();
                 $port->check($portId, UPDATE);
                 $before = json_decode($change['before_json'], true, 512, JSON_THROW_ON_ERROR);
+                $after = json_decode($change['after_json'], true, 512, JSON_THROW_ON_ERROR);
                 $DB->update(
                     PluginPatchpanelPanelPort::getTable(),
                     $before['port'] + ['date_mod' => $now],
@@ -471,6 +483,17 @@ final class PluginPatchpanelCsvImport
                         ]
                     );
                 }
+                $port = new PluginPatchpanelPanelPort();
+                $port->getFromDB($portId);
+                PluginPatchpanelAudit::record(
+                    (int) $port->fields['plugin_patchpanel_panels_id'],
+                    $portId,
+                    'rollback',
+                    'csv_import',
+                    __('Rolled back CSV import change', 'patchpanel'),
+                    $after,
+                    $before
+                );
             }
             $DB->update('glpi_plugin_patchpanel_importbatches', [
                 'status' => 'rolled_back',

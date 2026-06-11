@@ -22,12 +22,25 @@ if (isset($_POST['update'])) {
     global $DB;
     $DB->beginTransaction();
     try {
+        $before = PluginPatchpanelCsvImport::snapshot((int) $_POST['id']);
         if (!$port->update($portInput)) {
             throw new RuntimeException('Port update failed');
         }
-        if (!PluginPatchpanelPortEndpoint::saveForPort((int) $_POST['id'], $_POST)) {
+        if (!PluginPatchpanelPortEndpoint::saveForPort((int) $_POST['id'], $_POST, false)) {
             throw new RuntimeException('Endpoint update failed');
         }
+        PluginPatchpanelAudit::record(
+            (int) $port->fields['plugin_patchpanel_panels_id'],
+            (int) $_POST['id'],
+            'update',
+            'manual',
+            sprintf(
+                __('Updated panel port %d', 'patchpanel'),
+                (int) $port->fields['number']
+            ),
+            $before,
+            PluginPatchpanelCsvImport::snapshot((int) $_POST['id'])
+        );
         $DB->commit();
         Session::addMessageAfterRedirect(__('Patch panel port saved', 'patchpanel'));
     } catch (Throwable $e) {

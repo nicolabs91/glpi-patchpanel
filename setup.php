@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
     die('Direct access is not allowed');
 }
 
-define('PLUGIN_PATCHPANEL_VERSION', '0.1.0-dev');
+define('PLUGIN_PATCHPANEL_VERSION', '0.1.0');
 define('PLUGIN_PATCHPANEL_MIN_GLPI', '11.0.0');
 define('PLUGIN_PATCHPANEL_MAX_GLPI', '11.99.99');
 
@@ -25,6 +25,8 @@ function plugin_init_patchpanel(): void
     Plugin::registerClass('PluginPatchpanelRouteExplorer');
     Plugin::registerClass('PluginPatchpanelQuality');
     Plugin::registerClass('PluginPatchpanelCsvImport');
+    Plugin::registerClass('PluginPatchpanelLabel');
+    Plugin::registerClass('PluginPatchpanelAudit');
     Plugin::registerClass('PluginPatchpanelMigration');
 
     if (!in_array('PluginPatchpanelPanel', $CFG_GLPI['rackable_types'] ?? [], true)) {
@@ -45,7 +47,6 @@ function plugin_version_patchpanel(): array
         'version' => PLUGIN_PATCHPANEL_VERSION,
         'author' => 'Nicolabs91',
         'license' => 'GPLv3+',
-        'homepage' => 'https://github.com/nicolabs91/patchpanel',
         'requirements' => [
             'glpi' => [
                 'min' => PLUGIN_PATCHPANEL_MIN_GLPI,

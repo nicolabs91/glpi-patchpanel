@@ -44,6 +44,7 @@ class PluginPatchpanelPanel extends CommonDBTM
         $tabs = [];
         $this->addDefaultFormTab($tabs)
             ->addStandardTab('PluginPatchpanelPanelPort', $tabs, $options)
+            ->addStandardTab(Item_Rack::class, $tabs, $options)
             ->addStandardTab(Log::class, $tabs, $options);
         return $tabs;
     }
@@ -136,6 +137,10 @@ class PluginPatchpanelPanel extends CommonDBTM
     public function cleanDBonPurge()
     {
         global $DB;
+
+        $DB->delete('glpi_plugin_patchpanel_audits', [
+            'plugin_patchpanel_panels_id' => $this->getID(),
+        ]);
 
         $portIds = [];
         foreach ($DB->request([
