@@ -98,6 +98,33 @@ CREATE TABLE `glpi_plugin_patchpanel_migrations` (
   UNIQUE KEY `source` (`source_table`,`source_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL,
+            'glpi_plugin_patchpanel_importbatches' => <<<'SQL'
+CREATE TABLE `glpi_plugin_patchpanel_importbatches` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `batch_uuid` varchar(64) NOT NULL,
+  `status` varchar(24) NOT NULL DEFAULT 'applied',
+  `row_count` int unsigned NOT NULL DEFAULT 0,
+  `users_id` int unsigned NOT NULL DEFAULT 0,
+  `date_creation` timestamp NULL DEFAULT NULL,
+  `date_mod` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_uuid` (`batch_uuid`),
+  KEY `status_date` (`status`,`date_creation`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            'glpi_plugin_patchpanel_importchanges' => <<<'SQL'
+CREATE TABLE `glpi_plugin_patchpanel_importchanges` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `batch_uuid` varchar(64) NOT NULL,
+  `plugin_patchpanel_panelports_id` int unsigned NOT NULL,
+  `before_json` longtext NOT NULL,
+  `after_json` longtext NOT NULL,
+  `date_creation` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_port` (`batch_uuid`,`plugin_patchpanel_panelports_id`),
+  KEY `port_id` (`plugin_patchpanel_panelports_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
         ];
 
         foreach ($queries as $table => $query) {

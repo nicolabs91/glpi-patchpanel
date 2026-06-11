@@ -15,3 +15,5 @@
   text filters plus direct links to panel ports and routes.
 - Added full-route search and infrastructure impact analysis based on the same
   canonical, clickable physical route representation.
+- Added CSV upload preview, endpoint and duplicate validation, transaction-safe
+  bulk linking, immutable before/after snapshots, and guarded batch rollback.

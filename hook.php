@@ -18,6 +18,8 @@ function plugin_patchpanel_uninstall(): bool
         'glpi_plugin_patchpanel_panels',
         'glpi_plugin_patchpanel_panelmodels',
         'glpi_plugin_patchpanel_migrations',
+        'glpi_plugin_patchpanel_importchanges',
+        'glpi_plugin_patchpanel_importbatches',
     ] as $table) {
         if ($DB->tableExists($table)) {
             $DB->doQuery("DROP TABLE `$table`");

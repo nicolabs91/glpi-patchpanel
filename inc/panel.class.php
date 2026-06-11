@@ -147,11 +147,91 @@ class PluginPatchpanelPanel extends CommonDBTM
         }
 
         if ($portIds) {
+            $batchUuids = [];
+            $changeIds = [];
+            foreach ($DB->request([
+                'SELECT' => [
+                    'glpi_plugin_patchpanel_importchanges.id',
+                    'glpi_plugin_patchpanel_importchanges.batch_uuid',
+                ],
+                'FROM' => 'glpi_plugin_patchpanel_importchanges',
+                'INNER JOIN' => [
+                    'glpi_plugin_patchpanel_importbatches' => [
+                        'FKEY' => [
+                            'glpi_plugin_patchpanel_importchanges' => 'batch_uuid',
+                            'glpi_plugin_patchpanel_importbatches' => 'batch_uuid',
+                        ],
+                    ],
+                ],
+                'WHERE' => [
+                    'glpi_plugin_patchpanel_importchanges.plugin_patchpanel_panelports_id' => $portIds,
+                    'glpi_plugin_patchpanel_importbatches.status' => 'rolled_back',
+                ],
+            ]) as $change) {
+                $changeIds[] = (int) $change['id'];
+                $batchUuids[] = (string) $change['batch_uuid'];
+            }
+            if ($changeIds) {
+                $DB->delete('glpi_plugin_patchpanel_importchanges', ['id' => $changeIds]);
+                foreach (array_unique($batchUuids) as $batchUuid) {
+                    if (countElementsInTable(
+                        'glpi_plugin_patchpanel_importchanges',
+                        ['batch_uuid' => $batchUuid]
+                    ) === 0) {
+                        $DB->delete(
+                            'glpi_plugin_patchpanel_importbatches',
+                            ['batch_uuid' => $batchUuid]
+                        );
+                    }
+                }
+            }
             $DB->delete(PluginPatchpanelPortEndpoint::getTable(), [
                 'plugin_patchpanel_panelports_id' => $portIds,
             ]);
             $DB->delete(PluginPatchpanelPanelPort::getTable(), ['id' => $portIds]);
         }
+    }
+
+    public function pre_deleteItem()
+    {
+        global $DB;
+
+        if (empty($this->input['_purge'])) {
+            return true;
+        }
+
+        $active = $DB->request([
+            'SELECT' => ['glpi_plugin_patchpanel_importchanges.id'],
+            'FROM' => 'glpi_plugin_patchpanel_importchanges',
+            'INNER JOIN' => [
+                PluginPatchpanelPanelPort::getTable() => [
+                    'FKEY' => [
+                        'glpi_plugin_patchpanel_importchanges' => 'plugin_patchpanel_panelports_id',
+                        PluginPatchpanelPanelPort::getTable() => 'id',
+                    ],
+                ],
+                'glpi_plugin_patchpanel_importbatches' => [
+                    'FKEY' => [
+                        'glpi_plugin_patchpanel_importchanges' => 'batch_uuid',
+                        'glpi_plugin_patchpanel_importbatches' => 'batch_uuid',
+                    ],
+                ],
+            ],
+            'WHERE' => [
+                PluginPatchpanelPanelPort::getTable() . '.plugin_patchpanel_panels_id' => $this->getID(),
+                'glpi_plugin_patchpanel_importbatches.status' => 'applied',
+            ],
+            'LIMIT' => 1,
+        ])->current();
+        if ($active) {
+            Session::addMessageAfterRedirect(
+                __('Rollback active CSV import batches before purging this panel.', 'patchpanel'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+        return true;
     }
 
     public function showForm($ID, array $options = []): bool

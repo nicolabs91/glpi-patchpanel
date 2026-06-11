@@ -17,6 +17,13 @@ echo "<a class='btn btn-outline-primary' href='" .
 echo "<i class='ti ti-route'></i> " .
     htmlescape(__('Route search and impact', 'patchpanel'));
 echo '</a>';
+if (Session::haveRight('networking', UPDATE)) {
+    echo "<a class='btn btn-outline-primary' href='" .
+        htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/csvimport.php') . "'>";
+    echo "<i class='ti ti-file-spreadsheet'></i> " .
+        htmlescape(__('CSV import', 'patchpanel'));
+    echo '</a>';
+}
 $legacy = PluginPatchpanelMigration::getLegacySummary();
 if ($legacy['available'] && Session::haveRight('networking', UPDATE)) {
     echo "<a class='btn btn-outline-primary' href='" .

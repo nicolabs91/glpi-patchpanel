@@ -33,6 +33,11 @@ including outlets, endpoint devices, switch ports, switches, core equipment,
 and firewalls. Infrastructure badges open an impact view listing every patch
 panel route that depends on that GLPI network object.
 
+CSV imports use an upload-first preview. Every panel, port, endpoint, state,
+media value, duplicate, and existing assignment is validated before the apply
+button appears. Applying is one database transaction and creates a rollback
+batch; rollback is refused if an imported port was changed afterward.
+
 ## Legacy migration
 
 The migration page performs a read-only analysis first. It derives the new
