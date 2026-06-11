@@ -22,6 +22,7 @@ function plugin_init_patchpanel(): void
         ))),
     ]);
     Plugin::registerClass('PluginPatchpanelRoute');
+    Plugin::registerClass('PluginPatchpanelRouteExplorer');
     Plugin::registerClass('PluginPatchpanelQuality');
     Plugin::registerClass('PluginPatchpanelMigration');
 

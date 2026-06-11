@@ -215,7 +215,28 @@ final class PluginPatchpanelRoute extends CommonGLPI
 
     public static function render(int $portId): void
     {
-        $route = self::buildForPort($portId);
+        $steps = self::getStepsForPort($portId);
+        echo "<nav class='patchpanel-route' aria-label='" . htmlescape(__('Physical route', 'patchpanel')) . "'>";
+        if (!$steps) {
+            echo "<span class='patchpanel-route-empty'><i class='ti ti-circle-dashed'></i> " .
+                __('No route registered yet', 'patchpanel') . '</span>';
+        }
+        foreach ($steps as $index => $step) {
+            if ($index > 0) {
+                echo "<span class='patchpanel-route-arrow' aria-hidden='true'>→</span>";
+            }
+            self::renderStep($step);
+        }
+        echo '</nav>';
+    }
+
+    public static function getStepsForPort(int $portId): array
+    {
+        return self::getSteps(self::buildForPort($portId));
+    }
+
+    public static function getSteps(array $route): array
+    {
         $steps = [];
         if ($route['terminal']) {
             $steps[] = $route['terminal'];
@@ -246,19 +267,7 @@ final class PluginPatchpanelRoute extends CommonGLPI
             }
         }
         $steps = array_merge($steps, $route['upstream']);
-
-        echo "<nav class='patchpanel-route' aria-label='" . htmlescape(__('Physical route', 'patchpanel')) . "'>";
-        if (!$steps) {
-            echo "<span class='patchpanel-route-empty'><i class='ti ti-circle-dashed'></i> " .
-                __('No route registered yet', 'patchpanel') . '</span>';
-        }
-        foreach ($steps as $index => $step) {
-            if ($index > 0) {
-                echo "<span class='patchpanel-route-arrow' aria-hidden='true'>→</span>";
-            }
-            self::renderStep($step);
-        }
-        echo '</nav>';
+        return $steps;
     }
 
     private static function renderStep(array $step): void

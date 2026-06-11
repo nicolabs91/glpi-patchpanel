@@ -147,6 +147,22 @@
     width: 100% !important;
 }
 
+.patchpanel-explorer form input[name="q"] {
+    flex: 1 1 28rem;
+}
+
+.patchpanel-explorer-result .card-header {
+    align-items: center;
+    display: flex;
+}
+
+.patchpanel-impact-links {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
 .patchpanel-route-section {
     margin: 1.5rem auto;
     max-width: 1400px;

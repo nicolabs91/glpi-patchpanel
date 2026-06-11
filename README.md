@@ -28,6 +28,11 @@ The quality checkpoint adds an entity-aware overview for free, incomplete,
 connected, broken, disabled, and faulty ports. Results can be filtered by
 status or text and link directly to the affected panel port and physical route.
 
+The route explorer searches across every visible step in a physical route,
+including outlets, endpoint devices, switch ports, switches, core equipment,
+and firewalls. Infrastructure badges open an impact view listing every patch
+panel route that depends on that GLPI network object.
+
 ## Legacy migration
 
 The migration page performs a read-only analysis first. It derives the new

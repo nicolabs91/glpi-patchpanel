@@ -13,3 +13,5 @@
   idempotent mapping records, and batch rollback.
 - Added an entity-aware cabling quality and free-port dashboard with status and
   text filters plus direct links to panel ports and routes.
+- Added full-route search and infrastructure impact analysis based on the same
+  canonical, clickable physical route representation.

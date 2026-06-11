@@ -126,6 +126,9 @@ final class PluginPatchpanelQuality
         echo "<a class='btn btn-outline-secondary ms-auto' href='" .
             htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panel.php') . "'>";
         echo "<i class='ti ti-layout-grid'></i> " . htmlescape(__('Patch panels', 'patchpanel')) . '</a>';
+        echo "<a class='btn btn-outline-secondary' href='" .
+            htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/routes.php') . "'>";
+        echo "<i class='ti ti-route'></i> " . htmlescape(__('Route explorer', 'patchpanel')) . '</a>';
         echo '</div>';
 
         echo "<div class='patchpanel-quality-cards mb-3'>";
