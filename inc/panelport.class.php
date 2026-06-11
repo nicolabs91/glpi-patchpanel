@@ -264,14 +264,30 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panelport.bulk.php') . "'>";
         echo Html::hidden('plugin_patchpanel_panels_id', ['value' => $panel->getID()]);
         echo "<div class='row g-3'>";
-        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('From port', 'patchpanel')) . '</label>';
-        echo Html::input('from_port', ['type' => 'number', 'value' => 1, 'min' => 1, 'max' => $count]);
+        echo "<div class='col-md-2'><label class='form-label' for='patchpanel-bulk-from'>" .
+            htmlescape(__('From port', 'patchpanel')) . '</label>';
+        echo Html::input('from_port', [
+            'id' => 'patchpanel-bulk-from',
+            'type' => 'number',
+            'value' => 1,
+            'min' => 1,
+            'max' => $count,
+        ]);
         echo '</div>';
-        echo "<div class='col-md-2'><label class='form-label'>" . htmlescape(__('To port', 'patchpanel')) . '</label>';
-        echo Html::input('to_port', ['type' => 'number', 'value' => $count, 'min' => 1, 'max' => $count]);
+        echo "<div class='col-md-2'><label class='form-label' for='patchpanel-bulk-to'>" .
+            htmlescape(__('To port', 'patchpanel')) . '</label>';
+        echo Html::input('to_port', [
+            'id' => 'patchpanel-bulk-to',
+            'type' => 'number',
+            'value' => $count,
+            'min' => 1,
+            'max' => $count,
+        ]);
         echo '</div>';
-        echo "<div class='col-md-4'><label class='form-label'>" . htmlescape(__('Label pattern', 'patchpanel')) . '</label>';
+        echo "<div class='col-md-4'><label class='form-label' for='patchpanel-bulk-label'>" .
+            htmlescape(__('Label pattern', 'patchpanel')) . '</label>';
         echo Html::input('label_pattern', [
+            'id' => 'patchpanel-bulk-label',
             'value' => '',
             'placeholder' => 'Patch port {n:02}',
         ]);

@@ -41,23 +41,25 @@ echo "<a class='btn btn-outline-secondary' href='" .
 echo "<section class='card patchpanel-label-controls mb-3'><div class='card-body'>";
 echo "<form class='row g-3 align-items-end' method='get'>";
 echo Html::hidden('panel_id', ['value' => $panelId]);
-echo "<div class='col-sm-3'><label class='form-label'>" .
+echo "<div class='col-sm-3'><label class='form-label' for='patchpanel-label-from'>" .
     htmlescape(__('From port', 'patchpanel')) . '</label>';
 echo Html::input('from_port', [
+    'id' => 'patchpanel-label-from',
     'type' => 'number',
     'value' => $from,
     'min' => 1,
     'max' => $max,
 ]);
-echo '</div><div class="col-sm-3"><label class="form-label">' .
+echo '</div><div class="col-sm-3"><label class="form-label" for="patchpanel-label-to">' .
     htmlescape(__('To port', 'patchpanel')) . '</label>';
 echo Html::input('to_port', [
+    'id' => 'patchpanel-label-to',
     'type' => 'number',
     'value' => $to,
     'min' => 1,
     'max' => $max,
 ]);
-echo '</div><div class="col-sm-3"><button class="btn btn-outline-primary" type="submit">' .
+echo '</div><div class="col-sm-3"><button class="btn btn-primary" type="submit">' .
     htmlescape(__('Generate labels', 'patchpanel')) . '</button></div>';
 Html::closeForm();
 echo '</div></section>';

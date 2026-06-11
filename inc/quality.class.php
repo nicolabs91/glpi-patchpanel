@@ -146,9 +146,12 @@ final class PluginPatchpanelQuality
         echo "<div class='row g-2 align-items-end'>";
         echo "<div class='col-md-4'><label class='form-label'>" . htmlescape(__('Status')) . '</label>';
         Dropdown::showFromArray('status', $options, ['value' => $status]);
-        echo '</div><div class="col-md-5"><label class="form-label">' .
+        echo '</div><div class="col-md-5"><label class="form-label" for="patchpanel-quality-query">' .
             htmlescape(__('Panel, port or label', 'patchpanel')) . '</label>';
-        echo Html::input('q', ['value' => $query]);
+        echo Html::input('q', [
+            'id' => 'patchpanel-quality-query',
+            'value' => $query,
+        ]);
         echo '</div><div class="col-md-3 d-flex gap-2">';
         echo "<button class='btn btn-primary' type='submit'><i class='ti ti-filter'></i> " .
             htmlescape(__('Filter')) . '</button>';
@@ -184,7 +187,7 @@ final class PluginPatchpanelQuality
                 PluginPatchpanelPanelPort::getMediaOptions()[$row['media']] ?? $row['media']
             ) . '</td>';
             echo '<td>' . htmlescape($location ?: '-') . '</td>';
-            echo "<td class='text-end'><a class='btn btn-sm btn-outline-primary' href='" .
+            echo "<td class='text-end'><a class='btn btn-sm btn-primary' href='" .
                 htmlescape($portUrl) . "'>" . htmlescape(__('Open route', 'patchpanel')) .
                 '</a></td></tr>';
         }

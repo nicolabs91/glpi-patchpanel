@@ -1,4 +1,5 @@
 /.phpunit.cache/
 /vendor/
+/node_modules/
 /artifacts/
 *.zip

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-06-11
+
+- Added reproducible Chromium/Firefox browser tests and automated WCAG 2.1
+  component checks.
+- Associated visible labels with bulk, quality, and QR-range inputs.
+- Replaced low-contrast route and label actions with accessible primary buttons.
+
 ## 0.1.0 - 2026-06-11
 
 - Rebuilt the plugin around panels, panel ports, and explicit front/rear endpoints.

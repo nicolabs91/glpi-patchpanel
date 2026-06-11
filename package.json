@@ -1,0 +1,12 @@
+{
+  "name": "glpi-patchpanel-tests",
+  "private": true,
+  "scripts": {
+    "test:e2e": "node tests/e2e/first_checkpoint.js && node tests/e2e/second_checkpoint.js && node tests/e2e/migration_checkpoint.js && node tests/e2e/quality_checkpoint.js && node tests/e2e/route_explorer_checkpoint.js && node tests/e2e/csv_import_checkpoint.js && node tests/e2e/labels_checkpoint.js && node tests/e2e/audit_checkpoint.js && node tests/e2e/accessibility_checkpoint.js",
+    "test:firefox": "BROWSER=firefox npm run test:e2e"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "playwright": "1.59.1"
+  }
+}

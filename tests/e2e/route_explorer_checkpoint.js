@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./helpers');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
@@ -16,10 +16,7 @@ async function selectValue(page, name, value, label) {
 }
 
 (async () => {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1700, height: 1200 } });
   const errors = [];
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
