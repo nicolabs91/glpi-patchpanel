@@ -64,8 +64,8 @@ async function selectValue(page, name, value, label) {
   const port3Id = Number(new URL(port3Url, baseUrl).searchParams.get('id'));
 
   await page.goto(`${baseUrl}${port3Url}`, { waitUntil: 'networkidle' });
-  await selectValue(page, 'rear_items_id', 90, 'Kamer 0103 Wall outlet');
-  await selectValue(page, 'front_items_id', 228, 'SW-L1-IDF-A - Port 03');
+  await selectValue(page, 'rear_items_id', 299, 'Kamer 0201 Wall outlet');
+  await selectValue(page, 'front_items_id', 227, 'SW-L1-IDF-B - Port 02');
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -208,8 +208,8 @@ async function selectValue(page, name, value, label) {
     },
     bulk_result: port3,
     route_preserved:
-      routeBody.includes('Kamer 0103 Wall outlet')
-      && routeBody.includes('SW-L1-IDF-A'),
+      routeBody.includes('Kamer 0201 Wall outlet')
+      && routeBody.includes('SW-L1-IDF-B'),
     invalid_status: invalidResponse.status(),
     rollback_preserved: JSON.stringify(afterInvalid) === JSON.stringify({
       label: 'Rack A-03',
@@ -234,8 +234,8 @@ async function selectValue(page, name, value, label) {
     || result.bulk_result.label !== 'Rack A-03'
     || result.bulk_result.state !== 'reserved'
     || result.bulk_result.media !== 'fiber-mm'
-    || result.bulk_result.rear !== '90'
-    || result.bulk_result.front !== '228'
+    || result.bulk_result.rear !== '299'
+    || result.bulk_result.front !== '227'
     || !result.route_preserved
     || !result.rollback_preserved
     || ![200, 302, 303].includes(result.cleanup_status)

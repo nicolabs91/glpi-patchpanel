@@ -49,7 +49,12 @@ final class PluginPatchpanelRoute extends CommonGLPI
             }
         }
 
-        if (($endpoints[PluginPatchpanelPortEndpoint::FRONT]['itemtype'] ?? '') === NetworkPort::class) {
+        $result['terminal'] = self::terminalFromRearEndpoint($endpoints);
+
+        if (
+            $result['terminal'] === null
+            && ($endpoints[PluginPatchpanelPortEndpoint::FRONT]['itemtype'] ?? '') === NetworkPort::class
+        ) {
             $frontPortId = (int) $endpoints[PluginPatchpanelPortEndpoint::FRONT]['items_id'];
             $frontPort = new NetworkPort();
             if ($frontPort->getFromDB($frontPortId)) {
@@ -69,6 +74,39 @@ final class PluginPatchpanelRoute extends CommonGLPI
         }
 
         return $result;
+    }
+
+    private static function terminalFromRearEndpoint(array $endpoints): ?array
+    {
+        $rear = $endpoints[PluginPatchpanelPortEndpoint::REAR] ?? null;
+        if (($rear['itemtype'] ?? '') !== \Glpi\Socket::class) {
+            return null;
+        }
+
+        $socket = new \Glpi\Socket();
+        if (!$socket->getFromDB((int) ($rear['items_id'] ?? 0))) {
+            return null;
+        }
+
+        $networkPortId = (int) ($socket->fields['networkports_id'] ?? 0);
+        if ($networkPortId > 0) {
+            $networkPort = new NetworkPort();
+            if ($networkPort->getFromDB($networkPortId)) {
+                $terminal = self::stepForOwner($networkPort);
+                if ($terminal !== null) {
+                    $terminal['port'] = self::stepForItem($networkPort);
+                    return $terminal;
+                }
+            }
+        }
+
+        $itemtype = (string) ($socket->fields['itemtype'] ?? '');
+        $itemsId = (int) ($socket->fields['items_id'] ?? 0);
+        if ($itemtype === '' || $itemsId <= 0) {
+            return null;
+        }
+        $terminal = self::stepForReference($itemtype, $itemsId);
+        return $terminal['broken'] ? null : $terminal;
     }
 
     private static function stepForReference(string $itemtype, int $itemsId): array

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8 - 2026-06-12
+
+- Fixed physical routes after an end device is disconnected from and
+  reconnected to a GLPI wall outlet.
+- Resolve the terminal device and its port from the rear socket's selected
+  network port, while retaining legacy direct network-port links as fallback.
+
 ## 0.1.7 - 2026-06-12
 
 - Removed the redundant native GLPI cable selector from the standard panel-port
