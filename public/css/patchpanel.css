@@ -18,6 +18,56 @@
     text-decoration: none;
 }
 
+.patchpanel-route-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-bottom: .75rem;
+}
+
+.patchpanel-route-legend-item {
+    align-items: center;
+    background: color-mix(in srgb, var(--patchpanel-route-color) 10%, var(--tblr-bg-surface));
+    border: 2px solid var(--patchpanel-route-color);
+    border-radius: 999px;
+    color: var(--tblr-body-color);
+    display: inline-flex;
+    font-size: .78rem;
+    font-weight: 600;
+    gap: .3rem;
+    padding: .2rem .5rem;
+}
+
+.patchpanel-route-step[class*="patchpanel-route-zone-"] {
+    background: color-mix(in srgb, var(--patchpanel-route-color) 9%, var(--tblr-bg-surface));
+    border-color: var(--patchpanel-route-color);
+    border-left-width: .35rem;
+}
+
+.patchpanel-route-zone-endpoint {
+    --patchpanel-route-color: #7c3aed;
+}
+
+.patchpanel-route-zone-outlet {
+    --patchpanel-route-color: #0f766e;
+}
+
+.patchpanel-route-zone-panel {
+    --patchpanel-route-color: #b45309;
+}
+
+.patchpanel-route-zone-access {
+    --patchpanel-route-color: #1d4ed8;
+}
+
+.patchpanel-route-zone-core {
+    --patchpanel-route-color: #4338ca;
+}
+
+.patchpanel-route-zone-gateway {
+    --patchpanel-route-color: #b91c1c;
+}
+
 .patchpanel-grid {
     background: #252a31;
     border: .5rem solid #11151a;
@@ -177,11 +227,12 @@
 
 .patchpanel-route-step:hover,
 .patchpanel-route-step:focus-visible {
-    background: var(--tblr-primary-lt);
+    background: color-mix(in srgb, var(--patchpanel-route-color, var(--tblr-primary)) 18%, var(--tblr-bg-surface));
 }
 
 .patchpanel-route-step-broken {
     --patchpanel-status-color: #dc3545;
+    --patchpanel-route-color: #dc3545;
 }
 
 .patchpanel-route-arrow {

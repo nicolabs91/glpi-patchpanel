@@ -216,6 +216,7 @@ final class PluginPatchpanelRoute extends CommonGLPI
     public static function render(int $portId): void
     {
         $steps = self::getStepsForPort($portId);
+        self::renderLegend();
         echo "<nav class='patchpanel-route' aria-label='" . htmlescape(__('Physical route', 'patchpanel')) . "'>";
         if (!$steps) {
             echo "<span class='patchpanel-route-empty'><i class='ti ti-circle-dashed'></i> " .
@@ -239,22 +240,22 @@ final class PluginPatchpanelRoute extends CommonGLPI
     {
         $steps = [];
         if ($route['terminal']) {
-            $steps[] = $route['terminal'];
+            $steps[] = self::withZone($route['terminal'], 'endpoint');
             if (!empty($route['terminal']['port'])) {
-                $steps[] = $route['terminal']['port'];
+                $steps[] = self::withZone($route['terminal']['port'], 'endpoint');
             }
         }
         if ($route['rear']) {
-            $steps[] = $route['rear'];
+            $steps[] = self::withZone($route['rear'], 'outlet');
         }
         if ($route['panel']) {
-            $steps[] = $route['panel'];
+            $steps[] = self::withZone($route['panel'], 'panel');
         }
         if ($route['port']) {
-            $steps[] = $route['port'];
+            $steps[] = self::withZone($route['port'], 'panel');
         }
         if ($route['front']) {
-            $steps[] = $route['front'];
+            $steps[] = self::withZone($route['front'], 'access');
         }
 
         if ($route['front'] && $route['front']['type'] === NetworkPort::class) {
@@ -262,23 +263,77 @@ final class PluginPatchpanelRoute extends CommonGLPI
             if ($frontPort->getFromDB($route['front']['id'])) {
                 $owner = self::stepForOwner($frontPort);
                 if ($owner) {
-                    $steps[] = $owner;
+                    $zone = $owner['type'] === NetworkEquipment::class
+                        && self::isRouterOrFirewall((int) $owner['id'])
+                        ? 'gateway'
+                        : 'access';
+                    $steps[] = self::withZone($owner, $zone);
                 }
             }
         }
-        $steps = array_merge($steps, $route['upstream']);
+
+        $upstream = array_values($route['upstream']);
+        $last = $upstream ? $upstream[count($upstream) - 1] : null;
+        $endsAtGateway = $last
+            && ($last['type'] ?? '') === NetworkEquipment::class
+            && self::isRouterOrFirewall((int) ($last['id'] ?? 0));
+        foreach (array_chunk($upstream, 3) as $index => $edge) {
+            $isLastEdge = (($index + 1) * 3) >= count($upstream);
+            $fromZone = $index === 0 ? 'access' : 'core';
+            $toZone = $isLastEdge && $endsAtGateway ? 'gateway' : 'core';
+            if (isset($edge[0])) {
+                $steps[] = self::withZone($edge[0], $fromZone);
+            }
+            if (isset($edge[1])) {
+                $steps[] = self::withZone($edge[1], $toZone);
+            }
+            if (isset($edge[2])) {
+                $steps[] = self::withZone($edge[2], $toZone);
+            }
+        }
         return $steps;
+    }
+
+    private static function withZone(array $step, string $zone): array
+    {
+        $step['zone'] = $zone;
+        return $step;
+    }
+
+    private static function renderLegend(): void
+    {
+        echo "<div class='patchpanel-route-legend' role='list' aria-label='" .
+            htmlescape(__('Route color legend', 'patchpanel')) . "'>";
+        foreach ([
+            'endpoint' => ['ti ti-device-desktop', __('End device', 'patchpanel')],
+            'outlet' => ['ti ti-plug-connected', __('Connection point', 'patchpanel')],
+            'panel' => ['ti ti-layout-grid', __('Patch panel', 'patchpanel')],
+            'access' => ['ti ti-network', __('Access switch', 'patchpanel')],
+            'core' => ['ti ti-server-2', __('Core network', 'patchpanel')],
+            'gateway' => ['ti ti-shield-lock', __('Firewall / router', 'patchpanel')],
+        ] as $zone => [$icon, $label]) {
+            echo "<span role='listitem' class='patchpanel-route-legend-item patchpanel-route-zone-" .
+                htmlescape($zone) . "'><i class='" . htmlescape($icon) .
+                "'></i> " . htmlescape($label) . '</span>';
+        }
+        echo '</div>';
     }
 
     private static function renderStep(array $step): void
     {
         $class = $step['broken'] ? ' patchpanel-route-step-broken' : '';
+        $zone = $step['zone'] ?? '';
+        if (in_array($zone, ['endpoint', 'outlet', 'panel', 'access', 'core', 'gateway'], true)) {
+            $class .= ' patchpanel-route-zone-' . $zone;
+        }
         $content = "<i class='" . htmlescape($step['icon'] ?: 'ti ti-link') . "'></i> " .
             htmlescape($step['label'] ?: sprintf('#%d', $step['id']));
         if (!empty($step['url'])) {
-            echo "<a class='patchpanel-route-step$class' href='" . htmlescape($step['url']) . "'>$content</a>";
+            echo "<a class='patchpanel-route-step$class' data-route-zone='" .
+                htmlescape($zone) . "' href='" . htmlescape($step['url']) . "'>$content</a>";
         } else {
-            echo "<span class='patchpanel-route-step$class'>$content</span>";
+            echo "<span class='patchpanel-route-step$class' data-route-zone='" .
+                htmlescape($zone) . "'>$content</span>";
         }
     }
 

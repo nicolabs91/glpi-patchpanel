@@ -125,6 +125,10 @@ async function selectValue(page, name, value, label) {
 
   const routeBody = await page.locator('body').innerText();
   const routeLinks = await page.locator('.patchpanel-route-step[href]').count();
+  const routeZones = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
+    steps.map(step => step.getAttribute('data-route-zone'))
+  );
+  const routeLegendItems = await page.locator('.patchpanel-route-legend-item').count();
   await page.screenshot({
     path: 'artifacts/patchpanel-v2-first-route.png',
     fullPage: true,
@@ -149,6 +153,8 @@ async function selectValue(page, name, value, label) {
       core_switch: routeBody.includes('SW-L1-MDF-CORE-01'),
       firewall_router: routeBody.includes('FW-L1-MDF-01'),
       clickable_steps: routeLinks,
+      zones: routeZones,
+      legend_items: routeLegendItems,
     },
     unexpected_error: routeBody.includes('An unexpected error occurred'),
     browser_errors: browserErrors,
@@ -175,8 +181,12 @@ async function selectValue(page, name, value, label) {
   await browser.close();
 
   const routeComplete = Object.entries(result.route)
-    .filter(([key]) => key !== 'clickable_steps')
+    .filter(([key]) => !['clickable_steps', 'zones', 'legend_items'].includes(key))
     .every(([, value]) => value === true);
+  const expectedZones = [
+    'endpoint', 'endpoint', 'outlet', 'panel', 'panel', 'access', 'access',
+    'access', 'core', 'core', 'core', 'gateway', 'gateway',
+  ];
   if (
     result.list_status !== 200
     || !result.add_panel_visible
@@ -186,6 +196,8 @@ async function selectValue(page, name, value, label) {
     || result.visual_columns !== 24
     || !routeComplete
     || result.route.clickable_steps < 7
+    || result.route.legend_items !== 6
+    || JSON.stringify(result.route.zones) !== JSON.stringify(expectedZones)
     || result.unexpected_error
     || result.browser_errors.length
     || ![200, 302, 303].includes(result.cleanup_status)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-06-12
+
+- Added owner-consistent route colors for end devices, connection points,
+  patch panels, access switches, core infrastructure, and firewall/routers.
+- Added a textual route-color legend so meaning is not conveyed by color alone.
+- Added browser assertions for the full semantic zone sequence.
+
 ## 0.1.5 - 2026-06-12
 
 - Restored the physical panel convention of 24 ports per visual row: standard
