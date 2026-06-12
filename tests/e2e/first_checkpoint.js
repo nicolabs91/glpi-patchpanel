@@ -27,6 +27,11 @@ async function selectValue(page, name, value, label) {
       browserErrors.push(`console: ${message.text()}`);
     }
   });
+  page.on('response', response => {
+    if (response.status() >= 400) {
+      browserErrors.push(`${response.status()} ${response.url()}`);
+    }
+  });
 
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.fill('input[name="login_name"]', username);
@@ -34,11 +39,33 @@ async function selectValue(page, name, value, label) {
   await page.click('button[type="submit"], input[type="submit"]');
   await page.waitForLoadState('networkidle');
 
-  const listResponse = await page.goto(
-    `${baseUrl}/plugins/patchpanel/front/panel.php`,
+  const menuLink = page.locator('a[href="/plugins/patchpanel/front/panel.php"]', {
+    hasText: 'Patch panels',
+  }).first();
+  if (await menuLink.count() !== 1) {
+    throw new Error('Patch panels menu link is missing from the GLPI start page');
+  }
+  await page.locator(
+    'li.nav-item.dropdown[aria-label="Assets"] [data-testid="sidebar-menu-toggle"]'
+  ).click();
+  await menuLink.waitFor({ state: 'visible' });
+  const [listResponse] = await Promise.all([
+    page.waitForResponse(response =>
+      response.request().resourceType() === 'document'
+      && response.url() === `${baseUrl}/plugins/patchpanel/front/panel.php`
+    ),
+    menuLink.click(),
+  ]);
+  await page.waitForURL(`${baseUrl}/plugins/patchpanel/front/panel.php`);
+  await page.waitForLoadState('networkidle');
+  const listBody = await page.locator('body').innerText();
+
+  const legacyResponse = await page.goto(
+    `${baseUrl}/plugins/patchpanel/front/patchpanel.php`,
     { waitUntil: 'networkidle' }
   );
-  const listBody = await page.locator('body').innerText();
+  const legacyEntryRedirected =
+    page.url() === `${baseUrl}/plugins/patchpanel/front/panel.php`;
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
     waitUntil: 'networkidle',
@@ -98,6 +125,8 @@ async function selectValue(page, name, value, label) {
   const result = {
     list_status: listResponse.status(),
     list_loaded: listBody.includes('Patch panels'),
+    legacy_entry_status: legacyResponse.status(),
+    legacy_entry_redirected: legacyEntryRedirected,
     legacy_notice: visualBody.includes('4 panels') && visualBody.includes('72 ports'),
     panel_id: panelId,
     port_id: portId,
@@ -140,6 +169,8 @@ async function selectValue(page, name, value, label) {
     .every(([, value]) => value === true);
   if (
     result.list_status !== 200
+    || result.legacy_entry_status !== 200
+    || !result.legacy_entry_redirected
     || result.visual_port_count !== 24
     || !routeComplete
     || result.route.clickable_steps < 7

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 2026-06-12
+
+- Restored the legacy/default `front/patchpanel.php` entry point used by stale
+  GLPI menus and browser caches.
+- Changed the primary browser checkpoint to enter PatchPanel through the
+  visible GLPI menu and fail on HTTP 4xx/5xx responses.
+
 ## 0.1.1 - 2026-06-11
 
 - Added reproducible Chromium/Firefox browser tests and automated WCAG 2.1

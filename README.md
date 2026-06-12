@@ -12,7 +12,7 @@ router or firewall.
 
 ## Release status
 
-Version `0.1.1` targets GLPI 11 and PHP 8.2 or newer. It includes the new
+Version `0.1.2` targets GLPI 11 and PHP 8.2 or newer. It includes the new
 schema, panel and port creation, endpoint uniqueness rules, visual statuses,
 cable colors, reverse tabs, route navigation, quality checks, impact analysis,
 recoverable imports, QR labels, rack placement, and audit history.
@@ -73,10 +73,11 @@ retained.
 
 ## Verification
 
-The browser checkpoints in `tests/e2e` cover panel creation and visual routes,
-models and bulk transactions, migration and rollback, quality and free-port
-search, route impact analysis, CSV import and guarded rollback, rack/QR labels,
-audit history, and WCAG 2.1 A/AA component checks.
+The browser checkpoints in `tests/e2e` start from the visible GLPI menu and
+cover panel creation and visual routes, models and bulk transactions, migration
+and rollback, quality and free-port search, route impact analysis, CSV import
+and guarded rollback, rack/QR labels, audit history, and WCAG 2.1 A/AA
+component checks. HTTP 4xx/5xx responses fail the primary checkpoint.
 
 Install the test dependencies with `npm ci`, then run `npm run test:e2e`.
 Set `BROWSER=firefox` or use `npm run test:firefox` for Firefox.
