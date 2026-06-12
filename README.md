@@ -12,10 +12,12 @@ router or firewall.
 
 ## Release status
 
-Version `0.1.3` targets GLPI 11 and PHP 8.2 or newer. It includes the new
+Version `0.1.4` targets GLPI 11 and PHP 8.2 or newer. It includes the new
 schema, panel and port creation, endpoint uniqueness rules, visual statuses,
 cable colors, reverse tabs, route navigation, quality checks, impact analysis,
 recoverable imports, QR labels, rack placement, and audit history.
+Visual panels use at most 12 ports per row, so a standard 24-port panel is
+shown as two readable rows.
 
 The second checkpoint adds managed panel models and transaction-safe bulk
 updates for a continuous port range. Selecting a model on a new panel applies
@@ -74,8 +76,8 @@ retained.
 ## Verification
 
 The browser checkpoints in `tests/e2e` start from the visible GLPI menu, verify
-that an empty list has a readable add action, and create the first panel through
-that action. They also cover visual routes, models and bulk transactions,
+that the list has a readable add action, and create a panel through that
+action. They also cover visual routes, models and bulk transactions,
 migration and rollback, quality and free-port search, route impact analysis,
 CSV import and guarded rollback, rack/QR labels, audit history, and WCAG 2.1
 A/AA component checks. HTTP 4xx/5xx responses fail the primary checkpoint.

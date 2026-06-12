@@ -96,6 +96,9 @@ async function selectValue(page, name, value, label) {
   }
 
   const visualBody = await page.locator('body').innerText();
+  const visualColumns = await page.locator('.patchpanel-grid').evaluate(element =>
+    getComputedStyle(element).getPropertyValue('--patchpanel-columns').trim()
+  );
   const portTiles = page.locator('.patchpanel-port');
   const portCount = await portTiles.count();
   await page.screenshot({
@@ -111,8 +114,8 @@ async function selectValue(page, name, value, label) {
     throw new Error(`Port tile did not lead to a valid port: ${portUrl}`);
   }
 
-  await selectValue(page, 'rear_items_id', 88, 'Kamer 0102 Wall outlet');
-  await selectValue(page, 'front_items_id', 226, 'SW-L1-IDF-A - Port 02');
+  await selectValue(page, 'rear_items_id', 299, 'Kamer 0201 Wall outlet');
+  await selectValue(page, 'front_items_id', 227, 'SW-L1-IDF-B - Port 02');
   await selectValue(page, 'rear_cable_color', '#0d6efd', 'Blue');
   await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
   await page.fill('input[name="front_cable_label"]', 'CP-V2-E2E');
@@ -130,7 +133,6 @@ async function selectValue(page, name, value, label) {
   const result = {
     list_status: listResponse.status(),
     list_loaded: listBody.includes('Patch panels'),
-    empty_list_visible: listBody.includes('No results found'),
     add_panel_visible: addPanelVisible,
     legacy_entry_status: legacyResponse.status(),
     legacy_entry_redirected: legacyEntryRedirected,
@@ -138,11 +140,12 @@ async function selectValue(page, name, value, label) {
     panel_id: panelId,
     port_id: portId,
     visual_port_count: portCount,
+    visual_columns: Number(visualColumns),
     route: {
-      terminal: routeBody.includes('TV 002'),
-      socket: routeBody.includes('Kamer 0102 Wall outlet'),
+      terminal: routeBody.includes('TV 026'),
+      socket: routeBody.includes('Kamer 0201 Wall outlet'),
       panel: routeBody.includes(panelName),
-      access_switch: routeBody.includes('SW-L1-IDF-A'),
+      access_switch: routeBody.includes('SW-L1-IDF-B'),
       core_switch: routeBody.includes('SW-L1-MDF-CORE-01'),
       firewall_router: routeBody.includes('FW-L1-MDF-01'),
       clickable_steps: routeLinks,
@@ -176,11 +179,11 @@ async function selectValue(page, name, value, label) {
     .every(([, value]) => value === true);
   if (
     result.list_status !== 200
-    || !result.empty_list_visible
     || !result.add_panel_visible
     || result.legacy_entry_status !== 200
     || !result.legacy_entry_redirected
     || result.visual_port_count !== 24
+    || result.visual_columns !== 12
     || !routeComplete
     || result.route.clickable_steps < 7
     || result.unexpected_error

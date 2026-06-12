@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 - 2026-06-12
+
+- Limited the visual panel to 12 ports per row for a clearer 2 × 12 layout on
+  standard 24-port panels.
+- Added a browser assertion for the 12-column visual layout.
+- Kept the primary browser checkpoint isolated from the persistent example
+  panel by using a separate access-switch route.
+
 ## 0.1.3 - 2026-06-12
 
 - Added a visible `Add patch panel` action to the empty panel list.

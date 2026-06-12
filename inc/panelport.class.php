@@ -218,7 +218,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         $columns = (int) ceil(
             (int) $panel->fields['port_count'] / max(1, (int) $panel->fields['rows'])
         );
-        $columns = min(24, max(6, $columns));
+        $columns = min(12, max(6, $columns));
         echo "<div class='patchpanel-grid' style='--patchpanel-columns:$columns'>";
         foreach ($ports as $data) {
             $port = new self();
