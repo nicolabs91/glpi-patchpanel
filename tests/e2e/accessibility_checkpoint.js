@@ -36,9 +36,20 @@ async function scan(page, selectors) {
     await page.click('button[type="submit"], input[type="submit"]');
     await page.waitForLoadState('networkidle');
 
-    await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
+    await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.php`, {
       waitUntil: 'networkidle',
     });
+    const listActions = await scan(page, ['.patchpanel-list-actions']);
+    const addButton = page.locator(
+      'a[href="/plugins/patchpanel/front/panel.form.php?id=-1"]',
+      { hasText: 'Add patch panel' },
+    ).first();
+    if (!await addButton.isVisible()) {
+      throw new Error('Add patch panel is not visible on the empty list page');
+    }
+    await addButton.click();
+    await page.waitForURL(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`);
+    await page.waitForLoadState('networkidle');
     const panelName = `PP-A11Y-${Date.now()}`;
     await page.fill('input[name="name"]', panelName);
     await page.fill('input[name="port_count"]', '4');
@@ -82,7 +93,7 @@ async function scan(page, selectors) {
     );
     const audit = await scan(page, ['section.card']);
 
-    const result = { visual, route, quality, labels, audit };
+    const result = { listActions, visual, route, quality, labels, audit };
     console.log(JSON.stringify(result, null, 2));
     if (Object.values(result).some(violations => violations.length > 0)) {
       process.exitCode = 1;

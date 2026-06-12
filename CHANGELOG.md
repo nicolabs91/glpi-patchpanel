@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 - 2026-06-12
+
+- Added a visible `Add patch panel` action to the empty panel list.
+- Replaced low-contrast outline actions with readable solid buttons.
+- Extended browser and accessibility checkpoints to start from the empty list
+  and create a panel through the visible add action.
+
 ## 0.1.2 - 2026-06-12
 
 - Restored the legacy/default `front/patchpanel.php` entry point used by stale

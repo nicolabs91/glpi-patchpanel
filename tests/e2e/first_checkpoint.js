@@ -59,6 +59,11 @@ async function selectValue(page, name, value, label) {
   await page.waitForURL(`${baseUrl}/plugins/patchpanel/front/panel.php`);
   await page.waitForLoadState('networkidle');
   const listBody = await page.locator('body').innerText();
+  const addPanelButton = page.locator(
+    'a[href="/plugins/patchpanel/front/panel.form.php?id=-1"]',
+    { hasText: 'Add patch panel' }
+  ).first();
+  const addPanelVisible = await addPanelButton.isVisible();
 
   const legacyResponse = await page.goto(
     `${baseUrl}/plugins/patchpanel/front/patchpanel.php`,
@@ -67,9 +72,9 @@ async function selectValue(page, name, value, label) {
   const legacyEntryRedirected =
     page.url() === `${baseUrl}/plugins/patchpanel/front/panel.php`;
 
-  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
-    waitUntil: 'networkidle',
-  });
+  await addPanelButton.click();
+  await page.waitForURL(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`);
+  await page.waitForLoadState('networkidle');
   const panelName = `PP-V2-E2E-${Date.now()}`;
   await page.fill('input[name="name"]', panelName);
   await page.fill('input[name="port_count"]', '24');
@@ -125,6 +130,8 @@ async function selectValue(page, name, value, label) {
   const result = {
     list_status: listResponse.status(),
     list_loaded: listBody.includes('Patch panels'),
+    empty_list_visible: listBody.includes('No results found'),
+    add_panel_visible: addPanelVisible,
     legacy_entry_status: legacyResponse.status(),
     legacy_entry_redirected: legacyEntryRedirected,
     legacy_notice: visualBody.includes('4 panels') && visualBody.includes('72 ports'),
@@ -169,6 +176,8 @@ async function selectValue(page, name, value, label) {
     .every(([, value]) => value === true);
   if (
     result.list_status !== 200
+    || !result.empty_list_visible
+    || !result.add_panel_visible
     || result.legacy_entry_status !== 200
     || !result.legacy_entry_redirected
     || result.visual_port_count !== 24
