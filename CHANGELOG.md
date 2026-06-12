@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - 2026-06-12
+
+- Restored the physical panel convention of 24 ports per visual row: standard
+  24-port 1U panels use one row and 48-port 2U panels use two rows.
+- Updated the browser layout assertion to require 24 columns.
+
 ## 0.1.4 - 2026-06-12
 
 - Limited the visual panel to 12 ports per row for a clearer 2 × 12 layout on

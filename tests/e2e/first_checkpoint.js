@@ -183,7 +183,7 @@ async function selectValue(page, name, value, label) {
     || result.legacy_entry_status !== 200
     || !result.legacy_entry_redirected
     || result.visual_port_count !== 24
-    || result.visual_columns !== 12
+    || result.visual_columns !== 24
     || !routeComplete
     || result.route.clickable_steps < 7
     || result.unexpected_error

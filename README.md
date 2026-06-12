@@ -12,12 +12,12 @@ router or firewall.
 
 ## Release status
 
-Version `0.1.4` targets GLPI 11 and PHP 8.2 or newer. It includes the new
+Version `0.1.5` targets GLPI 11 and PHP 8.2 or newer. It includes the new
 schema, panel and port creation, endpoint uniqueness rules, visual statuses,
 cable colors, reverse tabs, route navigation, quality checks, impact analysis,
 recoverable imports, QR labels, rack placement, and audit history.
-Visual panels use at most 12 ports per row, so a standard 24-port panel is
-shown as two readable rows.
+Visual panels use at most 24 ports per row, matching a standard 24-port 1U
+panel and showing a 48-port 2U panel as two rows.
 
 The second checkpoint adds managed panel models and transaction-safe bulk
 updates for a continuous port range. Selecting a model on a new panel applies
