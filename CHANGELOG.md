@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 - 2026-06-12
+
+- Removed the redundant native GLPI cable selector from the standard panel-port
+  form while retaining the simpler cable ID and color fields.
+- Preserved existing native GLPI cable links when a panel port is edited.
+- Added a browser regression check that keeps the redundant selector hidden.
+
 ## 0.1.6 - 2026-06-12
 
 - Added owner-consistent route colors for end devices, connection points,

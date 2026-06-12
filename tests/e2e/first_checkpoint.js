@@ -113,6 +113,9 @@ async function selectValue(page, name, value, label) {
   if (!portId) {
     throw new Error(`Port tile did not lead to a valid port: ${portUrl}`);
   }
+  if (await page.locator('[name="front_cables_id"]').count()) {
+    throw new Error('The redundant GLPI cable field is visible in the standard port form');
+  }
 
   await selectValue(page, 'rear_items_id', 299, 'Kamer 0201 Wall outlet');
   await selectValue(page, 'front_items_id', 227, 'SW-L1-IDF-B - Port 02');

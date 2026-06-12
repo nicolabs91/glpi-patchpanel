@@ -18,6 +18,8 @@ if (isset($_POST['update'])) {
     ] as $field) {
         unset($portInput[$field]);
     }
+    $endpointInput = $_POST;
+    unset($endpointInput['front_cables_id']);
 
     global $DB;
     $DB->beginTransaction();
@@ -26,7 +28,7 @@ if (isset($_POST['update'])) {
         if (!$port->update($portInput)) {
             throw new RuntimeException('Port update failed');
         }
-        if (!PluginPatchpanelPortEndpoint::saveForPort((int) $_POST['id'], $_POST, false)) {
+        if (!PluginPatchpanelPortEndpoint::saveForPort((int) $_POST['id'], $endpointInput, false)) {
             throw new RuntimeException('Endpoint update failed');
         }
         PluginPatchpanelAudit::record(

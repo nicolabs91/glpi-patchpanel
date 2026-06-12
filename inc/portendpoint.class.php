@@ -61,12 +61,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
         echo "<tr class='tab_bg_1'><td>" . __('Cable ID', 'patchpanel') . "</td><td>";
         echo Html::input('front_cable_label', ['value' => $front['cable_label'] ?? '']);
-        echo '</td><td>' . __('GLPI cable', 'patchpanel') . '</td><td>';
-        Cable::dropdown([
-            'name' => 'front_cables_id',
-            'value' => $front['cables_id'] ?? 0,
-        ]);
-        echo '</td></tr>';
+        echo '</td><td colspan="2"></td></tr>';
     }
 
     private static function showColorDropdown(string $name, string $value): void
@@ -113,6 +108,8 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
         $port = new PluginPatchpanelPanelPort();
         $port->check($portId, UPDATE);
+        $existingEndpoints = self::getForPort($portId);
+        $existingFront = $existingEndpoints[self::FRONT] ?? [];
 
         $desired = [
             self::REAR => [
@@ -126,7 +123,10 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
                 'itemtype' => NetworkPort::class,
                 'items_id' => (int) ($input['front_items_id'] ?? 0),
                 'cable_color' => self::normalizeColor($input['front_cable_color'] ?? ''),
-                'cables_id' => max(0, (int) ($input['front_cables_id'] ?? 0)),
+                'cables_id' => max(
+                    0,
+                    (int) ($input['front_cables_id'] ?? ($existingFront['cables_id'] ?? 0))
+                ),
                 'cable_label' => trim((string) ($input['front_cable_label'] ?? '')),
             ],
         ];
