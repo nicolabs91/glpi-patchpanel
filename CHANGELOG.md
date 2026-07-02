@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Removed standalone bulk port management from the visual panel workflow.
+- Kept model-based port creation, per-port edits, CSV import, labels, routes,
+  audit history, and health checks intact.
+
 ## 0.1 - 2026-06-28
 
 - Added faster panel and quality status calculations based on endpoint counts

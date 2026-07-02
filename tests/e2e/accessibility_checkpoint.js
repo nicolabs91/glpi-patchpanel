@@ -62,7 +62,6 @@ async function scan(page, selectors) {
     const visual = await scan(page, [
       '.patchpanel-legend',
       '.patchpanel-grid',
-      '.patchpanel-bulk',
     ]);
     const portHref = await page.locator('.patchpanel-port').first().getAttribute('href');
 

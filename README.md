@@ -32,9 +32,8 @@ not require a second cleanup step. If a stale endpoint device selection is
 opened in GLPI's native socket form, PatchPanel also prevents GLPI's network
 port dropdown from re-saving the old device as a connection.
 
-The second checkpoint adds managed panel models and transaction-safe bulk
-updates for a continuous port range. Selecting a model on a new panel applies
-its port count, rows, and media. Existing panels require the explicit
+The second checkpoint adds managed panel models. Selecting a model on a new
+panel applies its port count, rows, and media. Existing panels require the explicit
 `Apply model layout` checkbox, preventing accidental layout replacement.
 
 The daily UI focuses on the cabling workflow. CSV import and health checks are
@@ -55,7 +54,7 @@ Patch panels participate in GLPI's native rack placement. Printable labels can
 be generated for any continuous port range; each label includes the panel,
 port, location, and a QR code that opens the exact panel port in GLPI.
 
-Route-affecting manual edits, bulk changes, CSV imports and rollbacks are
+Route-affecting manual edits, CSV imports and rollbacks are
 recorded in an immutable panel audit view with the responsible user and
 machine-readable before/after snapshots.
 
@@ -93,9 +92,9 @@ rollback data must be retained.
 
 The browser checkpoints in `tests/e2e` start from the visible GLPI menu, verify
 that the list has a readable add action, and create a panel through that
-action. They also cover visual routes, models and bulk transactions,
-route impact analysis, CSV import and guarded rollback, rack/QR labels, audit
-history, health checks, and WCAG 2.1 A/AA component checks. Database-model and
+action. They also cover visual routes, models, route impact analysis, CSV import
+and guarded rollback, rack/QR labels, audit history, health checks, and WCAG
+2.1 A/AA component checks. Database-model and
 health checkpoints
 verify the expected route indexes and core integrity invariants. HTTP 4xx/5xx
 responses fail the primary checkpoint.

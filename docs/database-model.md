@@ -76,8 +76,8 @@ checkpoint before relying on it in the UI.
 - Reverse object tabs should first collect candidate endpoint references via
   indexed `itemtype + items_id` or GLPI-owned indexed relations, then render only
   those routes.
-- Bulk, CSV import, and disconnect actions should run in explicit transactions
-  and record audit snapshots.
+- CSV import and disconnect actions should run in explicit transactions and
+  record audit snapshots.
 
 ## Data integrity rules
 

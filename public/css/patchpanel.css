@@ -339,11 +339,6 @@
     color: var(--tblr-secondary);
 }
 
-.patchpanel-bulk .select2-container,
-.patchpanel-bulk input {
-    width: 100% !important;
-}
-
 .patchpanel-label-sheet {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

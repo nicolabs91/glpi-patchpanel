@@ -42,11 +42,6 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
     waitUntil: 'networkidle',
   });
   await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
-  await page.fill('input[name="from_port"]', '2');
-  await page.fill('input[name="to_port"]', '2');
-  await page.selectOption('select[name="operational_state"]', 'reserved');
-  await page.locator('button[name="bulk_update"]').click();
-  await page.waitForLoadState('networkidle');
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/audit.php?panel_id=${panelId}`, {
     waitUntil: 'networkidle',
@@ -57,10 +52,6 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
   const manualDetails = manualRow.locator('details');
   await manualDetails.locator('summary').click();
   const manualDetailText = await manualDetails.innerText();
-  const bulkRow = page.locator('tbody tr', { hasText: 'bulk' });
-  const bulkDetails = bulkRow.locator('details');
-  await bulkDetails.locator('summary').click();
-  const bulkDetailText = await bulkDetails.innerText();
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
     waitUntil: 'networkidle',
@@ -84,15 +75,11 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
       body.includes('manual')
       && body.includes('Updated panel port 1')
       && manualDetailText.includes('Audited manual label'),
-    bulk_event:
-      body.includes('bulk')
-      && body.includes('Bulk-updated port 2'),
     user_visible: body.includes('glpi'),
     snapshots_visible:
       manualDetailText.includes('Before')
       && manualDetailText.includes('After')
-      && manualDetailText.includes('label')
-      && bulkDetailText.includes('operational_state'),
+      && manualDetailText.includes('label'),
     cleanup_status: cleanup.status(),
     browser_errors: errors,
   };
@@ -100,9 +87,8 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
   await browser.close();
 
   if (
-    result.event_rows !== 2
+    result.event_rows !== 1
     || !result.manual_event
-    || !result.bulk_event
     || !result.user_visible
     || !result.snapshots_visible
     || ![200, 302, 303].includes(result.cleanup_status)
