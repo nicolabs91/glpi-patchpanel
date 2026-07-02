@@ -163,7 +163,7 @@ final class PluginPatchpanelRouteExplorer
         echo "<div class='d-flex flex-wrap gap-2'>";
         echo Html::input('q', [
             'value' => $query,
-            'placeholder' => __('Panel, outlet, device, switch, port or firewall', 'patchpanel'),
+            'placeholder' => __('Panel, endpoint, device, switch, port or firewall', 'patchpanel'),
         ]);
         echo "<button class='btn btn-primary' type='submit'><i class='ti ti-search'></i> " .
             htmlescape(__('Search')) . '</button>';
@@ -193,7 +193,7 @@ final class PluginPatchpanelRouteExplorer
             echo "<div class='text-muted small'>" . htmlescape($row['label'] ?: '-') . '</div></div>';
             echo "<a class='btn btn-sm btn-outline-primary ms-auto' href='" . htmlescape($portUrl) . "'>" .
                 htmlescape(__('Open port', 'patchpanel')) . '</a></div><div class="card-body">';
-            PluginPatchpanelRoute::render((int) $row['id']);
+            PluginPatchpanelRoute::renderSteps($row['steps']);
             if ($row['impact_components']) {
                 echo "<div class='patchpanel-impact-links mt-3'><span class='text-muted small'>" .
                     htmlescape(__('Impact analysis:', 'patchpanel')) . '</span>';

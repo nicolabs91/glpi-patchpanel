@@ -32,6 +32,16 @@ class PluginPatchpanelPanel extends CommonDBTM
             'page' => $list,
             'icon' => self::getIcon(),
             'links' => ['search' => $list],
+            'options' => [
+                'patchpanel_routes' => [
+                    'title' => __('Route explorer', 'patchpanel'),
+                    'page' => '/plugins/patchpanel/front/routes.php',
+                    'icon' => 'ti ti-route',
+                    'links' => [
+                        'search' => '/plugins/patchpanel/front/routes.php',
+                    ],
+                ],
+            ],
         ];
         if (self::canCreate()) {
             $menu['links']['add'] = '/plugins/patchpanel/front/panel.form.php?id=-1';

@@ -165,23 +165,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             'ORDER' => ['row ASC', 'position ASC', 'number ASC'],
         ]);
 
-        $legacy = PluginPatchpanelMigration::getLegacySummary();
-        if ($legacy['available']) {
-            echo "<div class='alert alert-info d-flex align-items-center gap-2'>";
-            echo "<i class='ti ti-database'></i><span>";
-            echo sprintf(
-                __('Legacy source detected: %1$d panels and %2$d ports. It has not been changed or imported.', 'patchpanel'),
-                $legacy['panels'],
-                $legacy['ports']
-            );
-            echo '</span>';
-            if (Session::haveRight('networking', UPDATE)) {
-                echo "<a class='btn btn-sm btn-outline-primary ms-auto' href='" .
-                    htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/migration.php') . "'>";
-                echo htmlescape(__('Open migration preview', 'patchpanel')) . '</a>';
-            }
-            echo '</div>';
-        }
+        self::showPanelOverview($panel);
 
         echo "<div class='patchpanel-legend' aria-label='" . htmlescape(__('Status legend', 'patchpanel')) . "'>";
         foreach ([
@@ -190,6 +174,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             'connected' => __('Connected', 'patchpanel'),
             'warning' => __('Broken reference', 'patchpanel'),
             'disabled' => __('Out of service', 'patchpanel'),
+            'fault' => __('Fault', 'patchpanel'),
         ] as $status => $label) {
             echo "<span class='patchpanel-legend-item patchpanel-status-$status'>";
             echo "<i class='" . self::getStatusIcon($status) . "'></i> " . htmlescape($label);
@@ -197,7 +182,15 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         }
         echo '</div>';
 
-        echo "<div class='d-flex justify-content-end mb-3'>";
+        echo "<div class='d-flex flex-wrap justify-content-end gap-2 mb-3'>";
+        echo "<a class='btn btn-outline-secondary' href='" .
+            htmlescape(
+                $CFG_GLPI['root_doc'] .
+                '/plugins/patchpanel/front/routes.php?q=' .
+                rawurlencode((string) $panel->fields['name'])
+            ) . "'>";
+        echo "<i class='ti ti-route'></i> " .
+            htmlescape(__('Search routes', 'patchpanel')) . '</a>';
         echo "<a class='btn btn-outline-secondary me-2' href='" .
             htmlescape(
                 $CFG_GLPI['root_doc'] .
@@ -221,11 +214,9 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         $columns = min(24, max(6, $columns));
         echo "<div class='patchpanel-grid' style='--patchpanel-columns:$columns'>";
         foreach ($ports as $data) {
-            $port = new self();
-            $port->fields = $data;
-            $status = $port->getDisplayStatus();
             $url = $CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panelport.form.php?id=' . (int) $data['id'];
             $route = PluginPatchpanelRoute::buildForPort((int) $data['id']);
+            $status = self::getDisplayStatusFromRoute($data, $route);
             $title = trim((string) ($data['label'] ?? '')) ?: sprintf(__('Port %d', 'patchpanel'), $data['number']);
 
             echo "<a class='patchpanel-port patchpanel-status-" . htmlescape($status) .
@@ -246,6 +237,80 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         if ($panel->canUpdateItem()) {
             self::showBulkForm($panel);
         }
+    }
+
+    private static function showPanelOverview(PluginPatchpanelPanel $panel): void
+    {
+        $counts = self::getStatusCountsForPanel((int) $panel->getID());
+        $total = max(1, (int) $panel->fields['port_count']);
+        $connected = (int) ($counts['connected'] ?? 0);
+        $attention = (int) ($counts['partial'] ?? 0)
+            + (int) ($counts['warning'] ?? 0)
+            + (int) ($counts['fault'] ?? 0);
+
+        echo "<section class='patchpanel-panel-overview mb-3'>";
+        foreach ([
+            'connected' => [
+                __('Connected', 'patchpanel'),
+                $connected,
+                sprintf(__('%d%% patched', 'patchpanel'), (int) round(($connected / $total) * 100)),
+            ],
+            'free' => [
+                __('Free', 'patchpanel'),
+                (int) ($counts['free'] ?? 0),
+                __('Available ports', 'patchpanel'),
+            ],
+            'attention' => [
+                __('Needs attention', 'patchpanel'),
+                $attention,
+                __('Incomplete, broken or faulty', 'patchpanel'),
+            ],
+            'disabled' => [
+                __('Out of service', 'patchpanel'),
+                (int) ($counts['disabled'] ?? 0),
+                __('Disabled ports', 'patchpanel'),
+            ],
+        ] as $status => [$label, $count, $hint]) {
+            echo "<div class='patchpanel-overview-card patchpanel-status-" . htmlescape($status) . "'>";
+            echo "<span><i class='" . htmlescape(self::getStatusIcon($status)) . "'></i> " .
+                htmlescape($label) . '</span>';
+            echo '<strong>' . (int) $count . '</strong>';
+            echo '<small>' . htmlescape($hint) . '</small></div>';
+        }
+        echo '</section>';
+    }
+
+    private static function getStatusCountsForPanel(int $panelId): array
+    {
+        $counts = [
+            'free' => 0,
+            'partial' => 0,
+            'connected' => 0,
+            'warning' => 0,
+            'disabled' => 0,
+            'fault' => 0,
+        ];
+        foreach (self::getDisplayStatusMapForRows(self::getPanelStatusRows($panelId)) as $status) {
+            if (isset($counts[$status])) {
+                $counts[$status]++;
+            }
+        }
+        return $counts;
+    }
+
+    private static function getPanelStatusRows(int $panelId): array
+    {
+        global $DB;
+
+        $rows = [];
+        foreach ($DB->request([
+            'SELECT' => ['id', 'operational_state'],
+            'FROM' => self::getTable(),
+            'WHERE' => ['plugin_patchpanel_panels_id' => $panelId],
+        ]) as $row) {
+            $rows[] = $row;
+        }
+        return $rows;
     }
 
     private static function showBulkForm(PluginPatchpanelPanel $panel): void
@@ -403,10 +468,80 @@ class PluginPatchpanelPanelPort extends CommonDBChild
 
     public function getDisplayStatus(): string
     {
-        if (($this->fields['operational_state'] ?? '') === 'disabled') {
+        $route = PluginPatchpanelRoute::buildForPort((int) $this->fields['id']);
+        return self::getDisplayStatusFromRoute($this->fields, $route);
+    }
+
+    public static function getDisplayStatusMapForRows(array $rows): array
+    {
+        $counts = self::getEndpointCountsForPortRows($rows);
+        $statuses = [];
+        foreach ($rows as $row) {
+            $portId = (int) ($row['id'] ?? 0);
+            if ($portId <= 0) {
+                continue;
+            }
+            $statuses[$portId] = self::getDisplayStatusFromCounts(
+                (string) ($row['operational_state'] ?? ''),
+                (int) ($counts[$portId]['endpoint_count'] ?? 0),
+                (int) ($counts[$portId]['broken_count'] ?? 0)
+            );
+        }
+        return $statuses;
+    }
+
+    private static function getEndpointCountsForPortRows(array $rows): array
+    {
+        global $DB;
+
+        $portIds = array_values(array_filter(array_map(
+            static fn($row) => (int) ($row['id'] ?? 0),
+            $rows
+        )));
+        if (!$portIds) {
+            return [];
+        }
+
+        $endpointTable = PluginPatchpanelPortEndpoint::getTable();
+        $socketType = $DB->escape(\Glpi\Socket::class);
+        $networkPortType = $DB->escape(NetworkPort::class);
+        $sql = "SELECT e.plugin_patchpanel_panelports_id AS port_id,
+                       COUNT(e.id) AS endpoint_count,
+                       SUM(
+                           CASE
+                               WHEN e.itemtype = '$socketType' AND s.id IS NULL THEN 1
+                               WHEN e.itemtype = '$networkPortType' AND (np.id IS NULL OR np.is_deleted <> 0) THEN 1
+                               WHEN e.itemtype NOT IN ('$socketType', '$networkPortType') THEN 1
+                               ELSE 0
+                           END
+                       ) AS broken_count
+                FROM `$endpointTable` e
+                LEFT JOIN `glpi_sockets` s
+                    ON e.itemtype = '$socketType' AND s.id = e.items_id
+                LEFT JOIN `glpi_networkports` np
+                    ON e.itemtype = '$networkPortType' AND np.id = e.items_id
+                WHERE e.plugin_patchpanel_panelports_id IN (" . implode(',', $portIds) . ")
+                GROUP BY e.plugin_patchpanel_panelports_id";
+
+        $counts = [];
+        $result = $DB->doQuery($sql);
+        while ($result && ($row = $result->fetch_assoc())) {
+            $counts[(int) $row['port_id']] = [
+                'endpoint_count' => (int) ($row['endpoint_count'] ?? 0),
+                'broken_count' => (int) ($row['broken_count'] ?? 0),
+            ];
+        }
+        return $counts;
+    }
+
+    private static function getDisplayStatusFromRoute(array $fields, array $route): string
+    {
+        if (($fields['operational_state'] ?? '') === 'disabled') {
             return 'disabled';
         }
-        $route = PluginPatchpanelRoute::buildForPort((int) $this->fields['id']);
+        if (($fields['operational_state'] ?? '') === 'fault') {
+            return 'fault';
+        }
         if ($route['has_broken_reference']) {
             return 'warning';
         }
@@ -418,13 +553,36 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         };
     }
 
+    private static function getDisplayStatusFromCounts(
+        string $operationalState,
+        int $endpointCount,
+        int $brokenCount
+    ): string {
+        if ($operationalState === 'disabled') {
+            return 'disabled';
+        }
+        if ($operationalState === 'fault') {
+            return 'fault';
+        }
+        if ($brokenCount > 0) {
+            return 'warning';
+        }
+        return match ($endpointCount) {
+            0 => 'free',
+            1 => 'partial',
+            default => 'connected',
+        };
+    }
+
     public static function getStatusIcon(string $status): string
     {
         return match ($status) {
             'connected' => 'ti ti-circle-check',
+            'attention' => 'ti ti-alert-circle',
             'partial' => 'ti ti-alert-triangle',
             'warning' => 'ti ti-link-off',
             'disabled' => 'ti ti-ban',
+            'fault' => 'ti ti-tool',
             default => 'ti ti-circle-dashed',
         };
     }
@@ -436,6 +594,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             'partial' => __('Incomplete', 'patchpanel'),
             'warning' => __('Broken reference', 'patchpanel'),
             'disabled' => __('Out of service', 'patchpanel'),
+            'fault' => __('Fault', 'patchpanel'),
             default => __('Free', 'patchpanel'),
         };
     }
@@ -461,6 +620,8 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         ]);
         echo '</td></tr>';
 
+        $this->showPortWorkflowRow();
+
         PluginPatchpanelPortEndpoint::showEndpointFields((int) $this->getID());
         echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . "</td><td colspan='3'>";
         echo Html::textarea(['name' => 'comment', 'value' => $this->fields['comment'] ?? '']);
@@ -475,5 +636,73 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             echo '</section>';
         }
         return true;
+    }
+
+    private function showPortWorkflowRow(): void
+    {
+        global $CFG_GLPI;
+
+        $portId = (int) $this->getID();
+        $panelId = (int) ($this->fields['plugin_patchpanel_panels_id'] ?? 0);
+        if ($portId <= 0 || $panelId <= 0) {
+            return;
+        }
+
+        $status = $this->getDisplayStatus();
+        $panelUrl = $CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panel.form.php?id=' .
+            $panelId . '&forcetab=PluginPatchpanelPanelPort$1';
+        [$previousId, $nextId] = self::getNeighbourPortIds(
+            $panelId,
+            (int) ($this->fields['number'] ?? 0)
+        );
+
+        echo "<tr class='tab_bg_1'><td>" . htmlescape(__('Workflow', 'patchpanel')) . "</td><td colspan='3'>";
+        echo "<div class='patchpanel-port-workflow'>";
+        echo "<span class='patchpanel-quality-status patchpanel-status-" . htmlescape($status) . "'>";
+        echo "<i class='" . htmlescape(self::getStatusIcon($status)) . "'></i> " .
+            htmlescape(self::getStatusLabel($status)) . '</span>';
+        echo "<a class='btn btn-sm btn-outline-secondary' href='" . htmlescape($panelUrl) . "'>";
+        echo "<i class='ti ti-layout-grid'></i> " . htmlescape(__('Visual panel', 'patchpanel')) . '</a>';
+        if ($previousId > 0) {
+            echo "<a class='btn btn-sm btn-outline-secondary' href='" .
+                htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panelport.form.php?id=' . $previousId) .
+                "'><i class='ti ti-arrow-left'></i> " . htmlescape(__('Previous port', 'patchpanel')) . '</a>';
+        }
+        if ($nextId > 0) {
+            echo "<a class='btn btn-sm btn-outline-secondary' href='" .
+                htmlescape($CFG_GLPI['root_doc'] . '/plugins/patchpanel/front/panelport.form.php?id=' . $nextId) .
+                "'>" . htmlescape(__('Next port', 'patchpanel')) . " <i class='ti ti-arrow-right'></i></a>";
+        }
+        echo '</div></td></tr>';
+    }
+
+    private static function getNeighbourPortIds(int $panelId, int $number): array
+    {
+        global $DB;
+
+        $previous = $DB->request([
+            'SELECT' => ['id'],
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'plugin_patchpanel_panels_id' => $panelId,
+                'number' => ['<', $number],
+            ],
+            'ORDER' => ['number DESC'],
+            'LIMIT' => 1,
+        ])->current();
+        $next = $DB->request([
+            'SELECT' => ['id'],
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'plugin_patchpanel_panels_id' => $panelId,
+                'number' => ['>', $number],
+            ],
+            'ORDER' => ['number ASC'],
+            'LIMIT' => 1,
+        ])->current();
+        return [
+            (int) ($previous['id'] ?? 0),
+            (int) ($next['id'] ?? 0),
+        ];
     }
 }

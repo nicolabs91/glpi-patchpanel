@@ -51,23 +51,26 @@ async function selectValue(page, name, value, label) {
   await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
   const firstPortHref = await page.locator('.patchpanel-port').first().getAttribute('href');
   await page.goto(new URL(firstPortHref, baseUrl).toString(), { waitUntil: 'networkidle' });
-  await selectValue(page, 'rear_items_id', 88, 'Kamer 0102 Wall outlet');
-  await selectValue(page, 'front_items_id', 226, 'SW-L1-IDF-A - Port 02');
+  await selectValue(page, 'rear_items_id', 254, '123');
+  await selectValue(page, 'front_items_id', 359, 'NLH-F01-IDF-A-SW01 - Gi1/0/25');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
-  const query = encodeURIComponent(`${panelName} FW-L1-MDF-01`);
+  const query = encodeURIComponent(panelName);
   const response = await page.goto(
     `${baseUrl}/plugins/patchpanel/front/routes.php?q=${query}`,
     { waitUntil: 'networkidle' },
   );
   const searchBody = await page.locator('body').innerText();
+  const searchFullText = await page.locator('body').evaluate(element =>
+    element.textContent.replace(/\s+/g, ' ').trim()
+  );
+  const routeMoreCount = await page.locator('.patchpanel-explorer-result .patchpanel-route-more').count();
   const results = page.locator('.patchpanel-explorer-result');
   const routeSteps = page.locator('.patchpanel-explorer-result .patchpanel-route-step');
-  const firewallImpact = page.locator('.patchpanel-impact-links a', {
-    hasText: 'FW-L1-MDF-01',
-  }).first();
-  const impactHref = await firewallImpact.getAttribute('href');
+  const firstImpact = page.locator('.patchpanel-impact-links a').first();
+  const impactHref = await firstImpact.getAttribute('href');
+  const impactLabel = (await firstImpact.innerText()).trim();
   const searchResultCount = await results.count();
   const routeStepCount = await routeSteps.count();
 
@@ -102,13 +105,14 @@ async function selectValue(page, name, value, label) {
     empty_results: emptyResultCount,
     search_results: searchResultCount,
     search_has_panel: searchBody.includes(panelName),
-    search_has_outlet: searchBody.includes('Kamer 0102 Wall outlet'),
-    search_has_access_switch: searchBody.includes('SW-L1-IDF-A'),
-    search_has_core: searchBody.includes('SW-L1-MDF-CORE-01'),
-    search_has_firewall: searchBody.includes('FW-L1-MDF-01'),
+    search_has_endpoint: searchBody.includes('123'),
+    search_has_access_switch: searchBody.includes('NLH-F01-IDF-A-SW01'),
+    search_has_core: searchFullText.includes('NLH-MDF-CORE-SW01'),
+    route_more: routeMoreCount >= 1,
+    search_has_impact_link: Boolean(impactHref) && Boolean(impactLabel),
     clickable_steps: routeStepCount,
     impact_filter_visible:
-      impactBody.includes('patch panel routes depend on FW-L1-MDF-01'),
+      impactBody.includes(`patch panel routes depend on ${impactLabel}`),
     impact_results: impactResults,
     impact_has_panel: impactBody.includes(panelName),
     cleanup_status: cleanup.status(),
@@ -121,12 +125,13 @@ async function selectValue(page, name, value, label) {
     result.status !== 200
     || !result.empty_prompt
     || result.empty_results !== 0
-    || result.search_results !== 1
+    || result.search_results < 1
     || !result.search_has_panel
-    || !result.search_has_outlet
+    || !result.search_has_endpoint
     || !result.search_has_access_switch
     || !result.search_has_core
-    || !result.search_has_firewall
+    || !result.route_more
+    || !result.search_has_impact_link
     || result.clickable_steps < 7
     || !result.impact_filter_visible
     || result.impact_results < 1

@@ -37,7 +37,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
             __('Rear side: permanent cabling', 'patchpanel') . '</th></tr>';
-        echo "<tr class='tab_bg_1'><td>" . __('Wall outlet / connection point', 'patchpanel') . "</td><td>";
+        echo "<tr class='tab_bg_1'><td>" . __('Remote endpoint / connection point', 'patchpanel') . "</td><td>";
         Dropdown::show('Glpi\\Socket', [
             'name' => 'rear_items_id',
             'value' => $rear['items_id'] ?? 0,
@@ -159,6 +159,87 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         }
     }
 
+    public static function disconnectSide(int $portId, string $side): bool
+    {
+        global $DB;
+
+        if (!in_array($side, [self::REAR, self::FRONT], true)) {
+            throw new InvalidArgumentException(__('Invalid endpoint side.', 'patchpanel'));
+        }
+
+        $port = new PluginPatchpanelPanelPort();
+        $port->check($portId, UPDATE);
+        $existing = self::getForPort($portId)[$side] ?? [];
+        if (
+            $side === self::REAR
+            && ($existing['itemtype'] ?? '') === \Glpi\Socket::class
+            && (int) ($existing['items_id'] ?? 0) > 0
+        ) {
+            self::disconnectSocketDevice((int) $existing['items_id']);
+        }
+
+        return $DB->delete(self::getTable(), [
+            'plugin_patchpanel_panelports_id' => $portId,
+            'side' => $side,
+        ]);
+    }
+
+    public static function disconnectSocketDevice(int $socketId): bool
+    {
+        $socket = new \Glpi\Socket();
+        $socket->check($socketId, UPDATE);
+        return self::clearSocketDeviceFields($socket);
+    }
+
+    public static function cleanupSocketDeviceSelectionWhenPortIsEmpty(CommonDBTM $item): void
+    {
+        if (!$item instanceof \Glpi\Socket || (int) $item->getID() <= 0) {
+            return;
+        }
+
+        $input = is_array($item->input ?? null) ? $item->input : [];
+        $currentNetworkPortId = (int) ($item->fields['networkports_id'] ?? 0);
+        $hasDeviceSelection = (string) ($item->fields['itemtype'] ?? '') !== ''
+            && (int) ($item->fields['items_id'] ?? 0) > 0;
+        if (!$hasDeviceSelection) {
+            return;
+        }
+
+        if (array_key_exists('networkports_id', $input) && (int) $input['networkports_id'] > 0) {
+            if (
+                $currentNetworkPortId > 0
+                || (string) ($input['itemtype'] ?? $item->fields['itemtype']) !== (string) $item->fields['itemtype']
+                || (int) ($input['items_id'] ?? $item->fields['items_id']) !== (int) $item->fields['items_id']
+            ) {
+                return;
+            }
+        } elseif ($currentNetworkPortId > 0) {
+            return;
+        }
+
+        self::clearSocketDeviceFields($item);
+    }
+
+    private static function clearSocketDeviceFields(\Glpi\Socket $socket): bool
+    {
+        global $DB;
+
+        $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+        $cleared = [
+            'itemtype' => null,
+            'items_id' => 0,
+            'networkports_id' => 0,
+            'date_mod' => $now,
+        ];
+        $updated = $DB->update(\Glpi\Socket::getTable(), $cleared, ['id' => (int) $socket->getID()]);
+        if ($updated) {
+            foreach ($cleared as $field => $value) {
+                $socket->fields[$field] = $value;
+            }
+        }
+        return $updated;
+    }
+
     private static function saveSide(int $portId, string $side, array $endpoint): void
     {
         global $DB;
@@ -174,15 +255,14 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         ])->current();
 
         if ($endpoint['items_id'] <= 0) {
+            self::clearPreviousRearSocketDevice($side, $existing, $endpoint);
             if ($existing) {
                 $DB->delete($table, ['id' => $existing['id']]);
             }
             return;
         }
 
-        if (!self::isValidEndpoint($endpoint['itemtype'], $endpoint['items_id'])) {
-            throw new InvalidArgumentException('Invalid endpoint');
-        }
+        self::validateEndpointForPort($portId, $side, $endpoint['itemtype'], (int) $endpoint['items_id']);
 
         $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
         $values = $endpoint + [
@@ -191,6 +271,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             'date_mod' => $now,
         ];
         if ($existing) {
+            self::clearPreviousRearSocketDevice($side, $existing, $endpoint);
             $DB->update($table, $values, ['id' => $existing['id']]);
             return;
         }
@@ -198,13 +279,62 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         $DB->insert($table, $values);
     }
 
-    private static function isValidEndpoint(string $itemtype, int $itemsId): bool
+    private static function clearPreviousRearSocketDevice(string $side, $existing, array $endpoint): void
     {
-        if (!in_array($itemtype, ['Glpi\\Socket', NetworkPort::class], true)) {
-            return false;
+        if (
+            $side !== self::REAR
+            || empty($existing)
+            || ($existing['itemtype'] ?? '') !== \Glpi\Socket::class
+            || (int) ($existing['items_id'] ?? 0) <= 0
+        ) {
+            return;
         }
+
+        if (
+            ($endpoint['itemtype'] ?? '') === \Glpi\Socket::class
+            && (int) ($endpoint['items_id'] ?? 0) === (int) $existing['items_id']
+        ) {
+            return;
+        }
+
+        self::disconnectSocketDevice((int) $existing['items_id']);
+    }
+
+    private static function validateEndpointForPort(
+        int $portId,
+        string $side,
+        string $itemtype,
+        int $itemsId
+    ): void
+    {
+        global $DB;
+
+        $expectedType = $side === self::REAR ? \Glpi\Socket::class : NetworkPort::class;
+        if ($itemtype !== $expectedType) {
+            throw new InvalidArgumentException(__('Invalid endpoint type.', 'patchpanel'));
+        }
+
         $item = new $itemtype();
-        return $item->getFromDB($itemsId);
+        if (!$item->getFromDB($itemsId) || !$item->canViewItem()) {
+            throw new InvalidArgumentException(__('The selected endpoint does not exist or is inaccessible.', 'patchpanel'));
+        }
+        if ($item instanceof NetworkPort && (int) ($item->fields['is_deleted'] ?? 0) !== 0) {
+            throw new InvalidArgumentException(__('The selected network port is deleted.', 'patchpanel'));
+        }
+
+        $used = $DB->request([
+            'SELECT' => ['plugin_patchpanel_panelports_id'],
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'itemtype' => $itemtype,
+                'items_id' => $itemsId,
+                'NOT' => ['plugin_patchpanel_panelports_id' => $portId],
+            ],
+            'LIMIT' => 1,
+        ])->current();
+        if ($used) {
+            throw new InvalidArgumentException(__('The selected endpoint is already assigned to another panel port.', 'patchpanel'));
+        }
     }
 
     private static function normalizeColor(string $color): ?string

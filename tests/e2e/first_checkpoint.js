@@ -59,6 +59,29 @@ async function selectValue(page, name, value, label) {
   await page.waitForURL(`${baseUrl}/plugins/patchpanel/front/panel.php`);
   await page.waitForLoadState('networkidle');
   const listBody = await page.locator('body').innerText();
+  const hiddenDailyTools = {
+    health: await page.locator('.patchpanel-list-actions a', { hasText: /Health check/i }).count(),
+    csv: await page.locator('.patchpanel-list-actions a', { hasText: /CSV import/i }).count(),
+    legacy: await page.locator('.patchpanel-list-actions a', {
+      hasText: /Analyze legacy PatchPanel data/i,
+    }).count(),
+  };
+  const configResponse = await page.goto(
+    `${baseUrl}/plugins/patchpanel/front/config.php`,
+    { waitUntil: 'networkidle' },
+  );
+  const configTools = {
+    health: await page.locator('a[href="/plugins/patchpanel/front/health.php"]', {
+      hasText: /Health check/i,
+    }).count(),
+    csv: await page.locator('a[href="/plugins/patchpanel/front/csvimport.php"]', {
+      hasText: /CSV import/i,
+    }).count(),
+    legacy: await page.locator('a', { hasText: /Analyze legacy PatchPanel data/i }).count(),
+  };
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.php`, {
+    waitUntil: 'networkidle',
+  });
   const addPanelButton = page.locator(
     'a[href="/plugins/patchpanel/front/panel.form.php?id=-1"]',
     { hasText: 'Add patch panel' }
@@ -101,6 +124,15 @@ async function selectValue(page, name, value, label) {
   );
   const portTiles = page.locator('.patchpanel-port');
   const portCount = await portTiles.count();
+  const overviewCards = await page.locator('.patchpanel-overview-card').evaluateAll(cards =>
+    cards.map(card => card.textContent.replace(/\s+/g, ' ').trim())
+  );
+  const quickActions = {
+    routes: await page.locator('a', { hasText: /Search routes/i }).count(),
+    health: await page.locator('a', { hasText: /Health check/i }).count(),
+    audit: await page.locator('a', { hasText: /Audit history/i }).count(),
+    labels: await page.locator('a', { hasText: /Print QR labels/i }).count(),
+  };
   await page.screenshot({
     path: 'artifacts/patchpanel-v2-first-visual.png',
     fullPage: true,
@@ -116,9 +148,19 @@ async function selectValue(page, name, value, label) {
   if (await page.locator('[name="front_cables_id"]').count()) {
     throw new Error('The redundant GLPI cable field is visible in the standard port form');
   }
+  const portWorkflow = {
+    visible: await page.locator('.patchpanel-port-workflow').isVisible(),
+    status: await page.locator('.patchpanel-port-workflow').innerText(),
+    visual_link: await page.locator('.patchpanel-port-workflow a', {
+      hasText: /Visual panel/i,
+    }).count(),
+    next_link: await page.locator('.patchpanel-port-workflow a', {
+      hasText: /Next port/i,
+    }).count(),
+  };
 
-  await selectValue(page, 'rear_items_id', 299, 'Kamer 0201 Wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'SW-L1-IDF-B - Port 02');
+  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
   await selectValue(page, 'rear_cable_color', '#0d6efd', 'Blue');
   await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
   await page.fill('input[name="front_cable_label"]', 'CP-V2-E2E');
@@ -127,6 +169,11 @@ async function selectValue(page, name, value, label) {
   await page.locator('.patchpanel-route').waitFor({ state: 'visible' });
 
   const routeBody = await page.locator('body').innerText();
+  const routeFullText = await page.locator('.patchpanel-route').evaluate(element =>
+    element.textContent.replace(/\s+/g, ' ').trim()
+  );
+  const routeMoreToggles = await page.locator('.patchpanel-route-more-toggle').count();
+  const routeMoreCollapsed = await page.locator('.patchpanel-route-more').evaluate(element => !element.open);
   const routeLinks = await page.locator('.patchpanel-route-step[href]').count();
   const routeZones = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
     steps.map(step => step.getAttribute('data-route-zone'))
@@ -140,21 +187,29 @@ async function selectValue(page, name, value, label) {
   const result = {
     list_status: listResponse.status(),
     list_loaded: listBody.includes('Patch panels'),
+    hidden_daily_tools: hiddenDailyTools,
+    config_status: configResponse.status(),
+    config_tools: configTools,
     add_panel_visible: addPanelVisible,
     legacy_entry_status: legacyResponse.status(),
     legacy_entry_redirected: legacyEntryRedirected,
-    legacy_notice: visualBody.includes('4 panels') && visualBody.includes('72 ports'),
+    legacy_notice_hidden: !visualBody.includes('Legacy source detected'),
     panel_id: panelId,
     port_id: portId,
     visual_port_count: portCount,
     visual_columns: Number(visualColumns),
+    overview_cards: overviewCards,
+    quick_actions: quickActions,
+    port_workflow: portWorkflow,
     route: {
-      terminal: routeBody.includes('TV 026'),
-      socket: routeBody.includes('Kamer 0201 Wall outlet'),
+      terminal: routeBody.includes('NLH-R0201-TV01'),
+      socket: routeBody.includes('NLH-R0201-WA01'),
       panel: routeBody.includes(panelName),
-      access_switch: routeBody.includes('SW-L1-IDF-B'),
-      core_switch: routeBody.includes('SW-L1-MDF-CORE-01'),
-      firewall_router: routeBody.includes('FW-L1-MDF-01'),
+      access_switch: routeBody.includes('NLH-F01-IDF-B-SW01'),
+      core_collapsed_by_default: routeMoreCollapsed,
+      core_switch: routeFullText.includes('NLH-MDF-CORE-SW01'),
+      firewall_router: routeFullText.includes('NLH-MDF-FW01'),
+      more_toggle: routeMoreToggles === 1,
       clickable_steps: routeLinks,
       zones: routeZones,
       legend_items: routeLegendItems,
@@ -187,16 +242,32 @@ async function selectValue(page, name, value, label) {
     .filter(([key]) => !['clickable_steps', 'zones', 'legend_items'].includes(key))
     .every(([, value]) => value === true);
   const expectedZones = [
-    'endpoint', 'endpoint', 'outlet', 'panel', 'panel', 'access', 'access',
+    'endpoint', 'endpoint', 'connection', 'panel', 'panel', 'access', 'access',
     'access', 'core', 'core', 'core', 'gateway', 'gateway',
   ];
   if (
     result.list_status !== 200
     || !result.add_panel_visible
+    || result.config_status !== 200
+    || result.config_tools.health !== 1
+    || result.config_tools.csv !== 1
+    || result.config_tools.legacy !== 0
     || result.legacy_entry_status !== 200
     || !result.legacy_entry_redirected
+    || Object.values(result.hidden_daily_tools).some(count => count !== 0)
     || result.visual_port_count !== 24
     || result.visual_columns !== 24
+    || result.overview_cards.length !== 4
+    || !result.overview_cards.some(card => card.includes('Free') && card.includes('24'))
+    || result.quick_actions.routes < 1
+    || result.quick_actions.health !== 0
+    || result.quick_actions.audit < 1
+    || result.quick_actions.labels < 1
+    || !result.legacy_notice_hidden
+    || !result.port_workflow.visible
+    || !result.port_workflow.status.includes('Free')
+    || result.port_workflow.visual_link !== 1
+    || result.port_workflow.next_link !== 1
     || !routeComplete
     || result.route.clickable_steps < 7
     || result.route.legend_items !== 6

@@ -59,8 +59,8 @@ async function uploadCsv(page, content, filename) {
   });
   const invalidCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,88,226,#0d6efd,#ffc107,0,CSV-001`,
-    `${panelName},2,CSV Port 02,active,copper,88,228,#198754,#dc3545,0,CSV-002`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0,CSV-001`,
+    `${panelName},2,CSV Port 02,active,copper,24,227,#198754,#dc3545,0,CSV-002`,
   ].join('\n');
   await uploadCsv(page, invalidCsv, 'invalid-duplicate.csv');
   const invalidBody = await page.locator('body').innerText();
@@ -71,8 +71,8 @@ async function uploadCsv(page, content, filename) {
   });
   const validCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,88,226,#0d6efd,#ffc107,0,CSV-001`,
-    `${panelName},2,CSV Port 02,active,copper,90,228,#198754,#dc3545,0,CSV-002`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0,CSV-001`,
+    `${panelName},2,CSV Port 02,active,copper,25,227,#198754,#dc3545,0,CSV-002`,
   ].join('\n');
   await uploadCsv(page, validCsv, 'valid-import.csv');
   const previewBody = await page.locator('body').innerText();
@@ -94,7 +94,9 @@ async function uploadCsv(page, content, filename) {
     media: await page.locator('select[name="media"]').inputValue(),
     rear: await page.locator('select[name="rear_items_id"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
-    route: await page.locator('body').innerText(),
+    route: await page.locator('.patchpanel-route').evaluate(element =>
+      element.textContent.replace(/\s+/g, ' ').trim()
+    ),
   };
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
@@ -181,7 +183,7 @@ async function uploadCsv(page, content, filename) {
       invalidBody.includes('also used on CSV line 2') && invalidApplyButtons === 0,
     preview_ready_rows: readyRows,
     preview_has_changes:
-      previewBody.includes('CSV Port 01') && previewBody.includes('front: #226'),
+      previewBody.includes('CSV Port 01') && previewBody.includes('front: #225'),
     apply_message: appliedBody.includes('Imported 2 CSV rows in rollback batch'),
     batch,
     imported: {
@@ -191,9 +193,9 @@ async function uploadCsv(page, content, filename) {
       rear: imported.rear,
       front: imported.front,
       complete_route:
-        imported.route.includes('Kamer 0102 Wall outlet')
-        && imported.route.includes('SW-L1-IDF-A')
-        && imported.route.includes('FW-L1-MDF-01'),
+        imported.route.includes('NLH-L1-K101-A')
+        && imported.route.includes('NLH-F01-IDF-B-SW01')
+        && imported.route.includes('NLH-MDF-FW01'),
     },
     active_batch_blocks_panel_purge: panelStillExists,
     changed_port_blocks_rollback:
@@ -216,8 +218,8 @@ async function uploadCsv(page, content, filename) {
     || result.imported.label !== 'CSV Port 01'
     || result.imported.state !== 'reserved'
     || result.imported.media !== 'fiber-mm'
-    || result.imported.rear !== '88'
-    || result.imported.front !== '226'
+    || result.imported.rear !== '24'
+    || result.imported.front !== '225'
     || !result.imported.complete_route
     || !result.active_batch_blocks_panel_purge
     || !result.changed_port_blocks_rollback

@@ -277,6 +277,10 @@ final class PluginPatchpanelCsvImport
             $errors[] = sprintf(__('The %s endpoint does not exist or is inaccessible.', 'patchpanel'), $endpoint['side']);
             return;
         }
+        if ($item instanceof NetworkPort && (int) ($item->fields['is_deleted'] ?? 0) !== 0) {
+            $errors[] = sprintf(__('The %s endpoint refers to a deleted network port.', 'patchpanel'), $endpoint['side']);
+            return;
+        }
         $used = $DB->request([
             'SELECT' => ['plugin_patchpanel_panelports_id'],
             'FROM' => PluginPatchpanelPortEndpoint::getTable(),

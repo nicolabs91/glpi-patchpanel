@@ -10,8 +10,8 @@ function plugin_patchpanel_uninstall(): bool
 {
     global $DB;
 
-    // Legacy tables are deliberately excluded. They remain available for the
-    // migration preview and can only be removed by an explicit future action.
+    // Old third-party PatchPanel tables are deliberately excluded. Removing
+    // data outside this replacement plugin should stay an explicit DB action.
     foreach ([
         'glpi_plugin_patchpanel_portendpoints',
         'glpi_plugin_patchpanel_panelports',
@@ -55,4 +55,9 @@ function plugin_patchpanel_getDropdown(): array
             Session::getPluralNumber()
         ),
     ];
+}
+
+function plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::cleanupSocketDeviceSelectionWhenPortIsEmpty($item);
 }

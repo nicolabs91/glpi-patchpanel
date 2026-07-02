@@ -64,8 +64,8 @@ async function selectValue(page, name, value, label) {
   const port3Id = Number(new URL(port3Url, baseUrl).searchParams.get('id'));
 
   await page.goto(`${baseUrl}${port3Url}`, { waitUntil: 'networkidle' });
-  await selectValue(page, 'rear_items_id', 299, 'Kamer 0201 Wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'SW-L1-IDF-B - Port 02');
+  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -208,8 +208,8 @@ async function selectValue(page, name, value, label) {
     },
     bulk_result: port3,
     route_preserved:
-      routeBody.includes('Kamer 0201 Wall outlet')
-      && routeBody.includes('SW-L1-IDF-B'),
+      routeBody.includes('NLH-R0201-WA01')
+      && routeBody.includes('NLH-F01-IDF-B-SW01'),
     invalid_status: invalidResponse.status(),
     rollback_preserved: JSON.stringify(afterInvalid) === JSON.stringify({
       label: 'Rack A-03',

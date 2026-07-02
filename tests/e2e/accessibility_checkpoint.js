@@ -73,10 +73,10 @@ async function scan(page, selectors) {
     const route = await scan(page, ['.patchpanel-route-section']);
 
     await page.goto(
-      `${baseUrl}/plugins/patchpanel/front/quality.php?q=${encodeURIComponent(panelName)}`,
+      `${baseUrl}/plugins/patchpanel/front/health.php`,
       { waitUntil: 'networkidle' },
     );
-    const quality = await scan(page, ['.patchpanel-quality']);
+    const health = await scan(page, ['.patchpanel-health']);
 
     await page.goto(
       `${baseUrl}/plugins/patchpanel/front/labels.php?panel_id=${panelId}`,
@@ -93,7 +93,7 @@ async function scan(page, selectors) {
     );
     const audit = await scan(page, ['section.card']);
 
-    const result = { listActions, visual, route, quality, labels, audit };
+    const result = { listActions, visual, route, health, labels, audit };
     console.log(JSON.stringify(result, null, 2));
     if (Object.values(result).some(violations => violations.length > 0)) {
       process.exitCode = 1;

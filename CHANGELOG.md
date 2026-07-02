@@ -1,9 +1,49 @@
 # Changelog
 
+## 0.1 - 2026-06-28
+
+- Added faster panel and quality status calculations based on endpoint counts
+  instead of repeated full-route reconstruction.
+- Removed the standalone cabling quality dashboard from the GLPI UI because
+  patch-panel registration is manual data, not live infrastructure telemetry.
+- Removed the legacy PatchPanel analysis page from the active UI and test flow.
+- Moved CSV import and health check links to the plugin settings page so they
+  no longer appear in the daily PatchPanel list or visual panel actions.
+- Reused already-built route steps in the route explorer result rendering
+  instead of rebuilding every displayed route a second time.
+- Added request-local route caches for repeated GLPI object, owner, neighbour,
+  and router/firewall lookups during route-heavy views.
+- Added route endpoint actions for disconnecting one panel-port side or the
+  device selected on a GLPI remote endpoint.
+- Added quick workflow links from the visual panel and port form to route
+  search, audit history, labels, neighboring ports, and the visual panel.
+- Documented the GLPI-native database model, expected indexes, route-building
+  boundaries, and integrity rules.
+- Added a database-model browser checkpoint that verifies route indexes and
+  core endpoint integrity invariants.
+- Added an in-GLPI health check page for release readiness: expected indexes,
+  orphan records, duplicate endpoints, broken references, invalid endpoint
+  sides, empty applied CSV batches, and repair suggestions.
+- Stopped treating a remote endpoint's selected device as an active end device
+  when the endpoint no longer has a selected LAN/network port.
+- Added uniform asset-detail route cards with rear link, front link and route
+  health details plus consistent manage/disconnect actions.
+- Automatically clears the endpoint device/LAN selection when the rear
+  patch-panel side is disconnected or moved to another endpoint.
+- Removed the panel-port "End device on endpoint" helper row because the
+  terminal belongs in the physical route; stale GLPI endpoint device selections
+  are shown on endpoint route cards instead of the patch-panel
+  port form.
+- Prevented GLPI's native socket form from re-saving an old device/network-port
+  selection when the socket database row has already been cleared to no LAN
+  port.
+- Collapsed upstream core/firewall route steps behind a `...` control so the
+  normal route view stops at the access switch unless the full path is needed.
+
 ## 0.1.8 - 2026-06-12
 
 - Fixed physical routes after an end device is disconnected from and
-  reconnected to a GLPI wall outlet.
+  reconnected to a GLPI remote endpoint.
 - Resolve the terminal device and its port from the rear socket's selected
   network port, while retaining legacy direct network-port links as fallback.
 
