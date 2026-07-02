@@ -5,6 +5,8 @@
 - Removed standalone bulk port management from the visual panel workflow.
 - Kept model-based port creation, per-port edits, CSV import, labels, routes,
   audit history, and health checks intact.
+- Set a distinct connection-point route background so the physical-route
+  legend never reads as white on GLPI's default background.
 
 ## 0.1 - 2026-06-28
 

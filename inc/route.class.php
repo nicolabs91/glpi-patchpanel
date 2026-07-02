@@ -388,6 +388,40 @@ final class PluginPatchpanelRoute extends CommonGLPI
         return $step;
     }
 
+    private static function routeZoneStyles(): array
+    {
+        return [
+            'endpoint' => ['#ede9fe', '#7c3aed', '#4c1d95'],
+            'connection' => ['#ffffff', '#1f2937', '#1f2937'],
+            'panel' => ['#ffedd5', '#b45309', '#7c2d12'],
+            'access' => ['#dbeafe', '#1d4ed8', '#1e3a8a'],
+            'core' => ['#e0e7ff', '#4338ca', '#312e81'],
+            'gateway' => ['#fee2e2', '#b91c1c', '#7f1d1d'],
+        ];
+    }
+
+    private static function routeZoneInlineStyle(string $zone, bool $isStep = false): string
+    {
+        $styles = self::routeZoneStyles();
+        if (!isset($styles[$zone])) {
+            return '';
+        }
+
+        [$background, $border, $text] = $styles[$zone];
+        $style = sprintf(
+            'background-color:%s;border:2px solid %s;color:%s',
+            $background,
+            $border,
+            $text
+        );
+
+        if ($isStep) {
+            $style .= ';border-left-width:.35rem';
+        }
+
+        return $style;
+    }
+
     private static function renderLegend(): void
     {
         echo "<div class='patchpanel-route-legend' role='list' aria-label='" .
@@ -400,8 +434,9 @@ final class PluginPatchpanelRoute extends CommonGLPI
             'core' => ['ti ti-server-2', __('Core network', 'patchpanel')],
             'gateway' => ['ti ti-shield-lock', __('Firewall / router', 'patchpanel')],
         ] as $zone => [$icon, $label]) {
+            $style = self::routeZoneInlineStyle($zone);
             echo "<span role='listitem' class='patchpanel-route-legend-item patchpanel-route-zone-" .
-                htmlescape($zone) . "'><i class='" . htmlescape($icon) .
+                htmlescape($zone) . "' style='" . htmlescape($style) . "'><i class='" . htmlescape($icon) .
                 "'></i> " . htmlescape($label) . '</span>';
         }
         echo '</div>';
@@ -414,14 +449,16 @@ final class PluginPatchpanelRoute extends CommonGLPI
         if (in_array($zone, ['endpoint', 'connection', 'panel', 'access', 'core', 'gateway'], true)) {
             $class .= ' patchpanel-route-zone-' . $zone;
         }
+        $style = self::routeZoneInlineStyle($zone, true);
+        $styleAttribute = $style !== '' ? " style='" . htmlescape($style) . "'" : '';
         $content = "<i class='" . htmlescape($step['icon'] ?: 'ti ti-link') . "'></i> " .
             htmlescape($step['label'] ?: sprintf('#%d', $step['id']));
         if (!empty($step['url'])) {
             echo "<a class='patchpanel-route-step$class' data-route-zone='" .
-                htmlescape($zone) . "' href='" . htmlescape($step['url']) . "'>$content</a>";
+                htmlescape($zone) . "' href='" . htmlescape($step['url']) . "'$styleAttribute>$content</a>";
         } else {
             echo "<span class='patchpanel-route-step$class' data-route-zone='" .
-                htmlescape($zone) . "'>$content</span>";
+                htmlescape($zone) . "'$styleAttribute>$content</span>";
         }
     }
 

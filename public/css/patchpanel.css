@@ -67,10 +67,10 @@
 
 .patchpanel-route-legend-item {
     align-items: center;
-    background: color-mix(in srgb, var(--patchpanel-route-color) 10%, var(--tblr-bg-surface));
+    background: var(--patchpanel-route-bg);
     border: 2px solid var(--patchpanel-route-color);
     border-radius: 999px;
-    color: var(--tblr-body-color);
+    color: var(--patchpanel-route-text);
     display: inline-flex;
     font-size: .78rem;
     font-weight: 600;
@@ -79,33 +79,52 @@
 }
 
 .patchpanel-route-step[class*="patchpanel-route-zone-"] {
-    background: color-mix(in srgb, var(--patchpanel-route-color) 9%, var(--tblr-bg-surface));
+    background: var(--patchpanel-route-bg);
     border-color: var(--patchpanel-route-color);
     border-left-width: .35rem;
+    color: var(--patchpanel-route-text);
 }
 
 .patchpanel-route-zone-endpoint {
+    --patchpanel-route-bg: #ede9fe;
     --patchpanel-route-color: #7c3aed;
+    --patchpanel-route-text: #4c1d95;
 }
 
 .patchpanel-route-zone-connection {
-    --patchpanel-route-color: #0f766e;
+    --patchpanel-route-bg: #ffffff;
+    --patchpanel-route-color: #1f2937;
+    --patchpanel-route-text: #1f2937;
+}
+
+.patchpanel-route-step.patchpanel-route-zone-connection,
+.patchpanel-route-legend-item.patchpanel-route-zone-connection {
+    background: var(--patchpanel-route-bg);
+    color: var(--patchpanel-route-text);
 }
 
 .patchpanel-route-zone-panel {
+    --patchpanel-route-bg: #ffedd5;
     --patchpanel-route-color: #b45309;
+    --patchpanel-route-text: #7c2d12;
 }
 
 .patchpanel-route-zone-access {
+    --patchpanel-route-bg: #dbeafe;
     --patchpanel-route-color: #1d4ed8;
+    --patchpanel-route-text: #1e3a8a;
 }
 
 .patchpanel-route-zone-core {
+    --patchpanel-route-bg: #e0e7ff;
     --patchpanel-route-color: #4338ca;
+    --patchpanel-route-text: #312e81;
 }
 
 .patchpanel-route-zone-gateway {
+    --patchpanel-route-bg: #fee2e2;
     --patchpanel-route-color: #b91c1c;
+    --patchpanel-route-text: #7f1d1d;
 }
 
 .patchpanel-grid {

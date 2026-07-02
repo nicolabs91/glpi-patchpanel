@@ -178,7 +178,31 @@ async function selectValue(page, name, value, label) {
   const routeZones = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
     steps.map(step => step.getAttribute('data-route-zone'))
   );
+  const routeStepColors = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
+    Object.fromEntries(steps.map(step => [
+      step.getAttribute('data-route-zone'),
+      getComputedStyle(step).backgroundColor,
+    ]))
+  );
+  const routeStepBorders = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
+    Object.fromEntries(steps.map(step => [
+      step.getAttribute('data-route-zone'),
+      getComputedStyle(step).borderColor,
+    ]))
+  );
   const routeLegendItems = await page.locator('.patchpanel-route-legend-item').count();
+  const routeLegendColors = await page.locator('.patchpanel-route-legend-item').evaluateAll(items =>
+    Object.fromEntries(items.map(item => [
+      item.getAttribute('class').match(/patchpanel-route-zone-([a-z]+)/)?.[1],
+      getComputedStyle(item).backgroundColor,
+    ]))
+  );
+  const routeLegendBorders = await page.locator('.patchpanel-route-legend-item').evaluateAll(items =>
+    Object.fromEntries(items.map(item => [
+      item.getAttribute('class').match(/patchpanel-route-zone-([a-z]+)/)?.[1],
+      getComputedStyle(item).borderColor,
+    ]))
+  );
   await page.screenshot({
     path: 'artifacts/patchpanel-v2-first-route.png',
     fullPage: true,
@@ -212,7 +236,11 @@ async function selectValue(page, name, value, label) {
       more_toggle: routeMoreToggles === 1,
       clickable_steps: routeLinks,
       zones: routeZones,
+      step_colors: routeStepColors,
+      step_borders: routeStepBorders,
       legend_items: routeLegendItems,
+      legend_colors: routeLegendColors,
+      legend_borders: routeLegendBorders,
     },
     unexpected_error: routeBody.includes('An unexpected error occurred'),
     browser_errors: browserErrors,
@@ -239,7 +267,10 @@ async function selectValue(page, name, value, label) {
   await browser.close();
 
   const routeComplete = Object.entries(result.route)
-    .filter(([key]) => !['clickable_steps', 'zones', 'legend_items'].includes(key))
+    .filter(([key]) => ![
+      'clickable_steps', 'zones', 'step_colors', 'step_borders',
+      'legend_items', 'legend_colors', 'legend_borders',
+    ].includes(key))
     .every(([, value]) => value === true);
   const expectedZones = [
     'endpoint', 'endpoint', 'connection', 'panel', 'panel', 'access', 'access',
@@ -271,6 +302,11 @@ async function selectValue(page, name, value, label) {
     || !routeComplete
     || result.route.clickable_steps < 7
     || result.route.legend_items !== 6
+    || result.route.legend_colors.endpoint !== 'rgb(237, 233, 254)'
+    || result.route.legend_colors.connection !== 'rgb(255, 255, 255)'
+    || result.route.legend_borders.connection !== 'rgb(31, 41, 55)'
+    || result.route.step_colors.connection !== 'rgb(255, 255, 255)'
+    || result.route.step_borders.connection !== 'rgb(31, 41, 55)'
     || JSON.stringify(result.route.zones) !== JSON.stringify(expectedZones)
     || result.unexpected_error
     || result.browser_errors.length
