@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
     die('Direct access is not allowed');
 }
 
-define('PLUGIN_PATCHPANEL_VERSION', '0.1');
+define('PLUGIN_PATCHPANEL_VERSION', '0.1.1');
 define('PLUGIN_PATCHPANEL_MIN_GLPI', '11.0.0');
 define('PLUGIN_PATCHPANEL_MAX_GLPI', '11.99.99');
 
@@ -41,11 +41,11 @@ function plugin_init_patchpanel(): void
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::PRE_ITEM_UPDATE]['patchpanel'][\Glpi\Socket::class]
         = 'plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty';
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_UPDATE]['patchpanel'][\Glpi\Socket::class]
-        = 'plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty';
+        = 'plugin_patchpanel_sync_socket_native_network_link';
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_ADD]['patchpanel'][\Glpi\Socket::class]
-        = 'plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty';
-    $PLUGIN_HOOKS['add_css']['patchpanel'] = 'css/patchpanel.css';
-    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'js/socket-cleanup.js';
+        = 'plugin_patchpanel_sync_socket_native_network_link';
+    $PLUGIN_HOOKS['add_css']['patchpanel'] = 'public/css/patchpanel.css';
+    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/socket-cleanup.js';
 }
 
 function plugin_version_patchpanel(): array

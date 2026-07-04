@@ -264,29 +264,29 @@ class PluginPatchpanelPanel extends CommonDBTM
         ]);
         echo '</td></tr>';
 
+        $hasModel = (int) ($this->fields['plugin_patchpanel_panelmodels_id'] ?? 0) > 0;
+
         echo "<tr class='tab_bg_1'><td>" . __('Model') . "</td><td>";
         PluginPatchpanelPanelModel::dropdown([
             'name' => 'plugin_patchpanel_panelmodels_id',
             'value' => $this->fields['plugin_patchpanel_panelmodels_id'] ?? 0,
         ]);
-        echo '</td><td>' . __('Number of ports', 'patchpanel') . '</td><td>';
-        echo Html::input('port_count', [
-            'type' => 'number',
-            'value' => $this->fields['port_count'] ?? 24,
-            'min' => 1,
-            'max' => 512,
-        ]);
+        if ($hasModel) {
+            echo '</td><td colspan="2">';
+            echo Html::hidden('port_count', ['value' => $this->fields['port_count'] ?? 24]);
+        } else {
+            echo '</td><td>' . __('Number of ports', 'patchpanel') . '</td><td>';
+            echo Html::input('port_count', [
+                'type' => 'number',
+                'value' => $this->fields['port_count'] ?? 24,
+                'min' => 1,
+                'max' => 512,
+            ]);
+        }
         echo '</td></tr>';
 
         if (!$this->isNewID($ID)) {
-            echo "<tr class='tab_bg_1'><td>" . __('Apply model layout', 'patchpanel') . "</td><td colspan='3'>";
-            echo Html::hidden('apply_model', ['value' => 0]);
-            echo "<label class='form-check'>";
-            echo "<input class='form-check-input' type='checkbox' name='apply_model' value='1'>";
-            echo "<span class='form-check-label'>" .
-                htmlescape(__('Replace port count, rows and media with the selected model when saving.', 'patchpanel')) .
-                '</span></label>';
-            echo '</td></tr>';
+            echo Html::hidden('apply_model', ['value' => 1]);
         } else {
             echo "<tr class='tab_bg_1'><td colspan='4'><div class='alert alert-info mb-0'>";
             echo htmlescape(
@@ -307,14 +307,16 @@ class PluginPatchpanelPanel extends CommonDBTM
         ]);
         echo '</td></tr>';
 
-        echo "<tr class='tab_bg_1'><td>" . __('Serial number') . "</td><td>";
-        echo Html::input('serial', ['value' => $this->fields['serial'] ?? '']);
-        echo '</td><td>' . __('Inventory number') . '</td><td>';
+        echo "<tr class='tab_bg_1'><td>" . __('Inventory number') . '</td><td colspan="3">';
         echo Html::input('otherserial', ['value' => $this->fields['otherserial'] ?? '']);
         echo '</td></tr>';
 
         echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . "</td><td colspan='3'>";
-        echo Html::textarea(['name' => 'comment', 'value' => $this->fields['comment'] ?? '']);
+        Html::textarea([
+            'name' => 'comment',
+            'value' => $this->fields['comment'] ?? '',
+            'rows' => 8,
+        ]);
         echo '</td></tr>';
 
         $this->showFormButtons($options);

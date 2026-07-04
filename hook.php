@@ -61,3 +61,9 @@ function plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty(Co
 {
     PluginPatchpanelPortEndpoint::cleanupSocketDeviceSelectionWhenPortIsEmpty($item);
 }
+
+function plugin_patchpanel_sync_socket_native_network_link(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::cleanupSocketDeviceSelectionWhenPortIsEmpty($item);
+    PluginPatchpanelPortEndpoint::synchronizeNativeNetworkPortLinksForSocket($item);
+}

@@ -1,7 +1,36 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-07-04
 
+- Resynced native GLPI `Connected to` links when a socket endpoint is saved,
+  and added a health check for missing native links so PatchPanel and the GLPI
+  switch-port overview cannot silently drift apart.
+- Fixed e2e fixture cleanup that could remove demo native links while testing
+  temporary direct SQL routes.
+- Removed the visible `Apply model layout` checkbox from the patch-panel form;
+  selected models still apply their port count, rows, and media on save.
+- Hid the patch-panel `Number of ports` field when a model is selected, keeping
+  the model as the visible source of the port count.
+- Synced PatchPanel front/rear saves with GLPI's native network-port
+  `Connected to` relation, and only mark a panel port connected when the rear
+  socket has a real endpoint network port plus a front switch/router port.
+- Simplified the visual-panel status set to `Free`, `Not connected`, and
+  `Connected`; removed separate `Broken reference`, `Out of service`, and
+  `Fault` statuses from the daily panel workflow.
+- Removed the `Print QR labels` action from the visual panel quick actions.
+- Replaced the visual-panel `Not connected` warning icon with the neutral
+  dashed-circle icon and kept the legend badge from squeezing the label.
+- Collapsed physical-route device and network-port pairs into one route badge,
+  for example `Device · eth0` or `Switch · Gi1/0/24`, while preserving the
+  underlying GLPI references for search and impact analysis.
+- Matched the visual-panel `Not connected` legend and port tile fill/border
+  colors so both read as the same light-gray state.
+- Renamed the visual-panel incomplete state to `Not connected` and changed it
+  from yellow to light gray.
+- Removed the patch-panel serial-number form field, rear-side cable color
+  field, and oversized comment textareas from the normal editing workflow.
+- Fixed comment textareas printing a stray `1` after the field.
+- Pointed plugin CSS and JavaScript hooks at the tracked `public/` assets.
 - Removed standalone bulk port management from the visual panel workflow.
 - Kept model-based port creation, per-port edits, CSV import, labels, routes,
   audit history, and health checks intact.
@@ -97,7 +126,7 @@
 - Changed the primary browser checkpoint to enter PatchPanel through the
   visible GLPI menu and fail on HTTP 4xx/5xx responses.
 
-## 0.1.1 - 2026-06-11
+## 0.1.1 prerelease notes - 2026-06-11
 
 - Added reproducible Chromium/Firefox browser tests and automated WCAG 2.1
   component checks.

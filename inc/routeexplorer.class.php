@@ -80,6 +80,14 @@ final class PluginPatchpanelRouteExplorer
             if (($step['type'] ?? '') === $itemtype && (int) ($step['id'] ?? 0) === $itemsId) {
                 return true;
             }
+            foreach (($step['references'] ?? []) as $reference) {
+                if (
+                    ($reference['type'] ?? '') === $itemtype
+                    && (int) ($reference['id'] ?? 0) === $itemsId
+                ) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -95,6 +103,10 @@ final class PluginPatchpanelRouteExplorer
         foreach ($steps as $step) {
             $parts[] = $step['label'] ?? '';
             $parts[] = $step['type'] ?? '';
+            foreach (($step['references'] ?? []) as $reference) {
+                $parts[] = $reference['label'] ?? '';
+                $parts[] = $reference['type'] ?? '';
+            }
         }
         $haystack = mb_strtolower(implode(' ', $parts));
         foreach ($terms as $term) {
@@ -113,6 +125,15 @@ final class PluginPatchpanelRouteExplorer
                 continue;
             }
             $key = $step['type'] . ':' . (int) $step['id'];
+            foreach (($step['references'] ?? []) as $reference) {
+                if (
+                    ($reference['type'] ?? '') === $step['type']
+                    && (int) ($reference['id'] ?? 0) === (int) ($step['id'] ?? 0)
+                ) {
+                    $step['label'] = $reference['label'] ?? $step['label'];
+                    break;
+                }
+            }
             $components[$key] = $step;
         }
         return array_values($components);

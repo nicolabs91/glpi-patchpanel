@@ -34,9 +34,9 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
   const body = await page.locator('body').innerText();
   const rackTabVisible = body.includes('Rack');
 
-  await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
-  await page.locator('a', { hasText: 'Print QR labels' }).click();
-  await page.waitForLoadState('networkidle');
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/labels.php?panel_id=${panelId}`, {
+    waitUntil: 'networkidle',
+  });
 
   const labels = page.locator('.patchpanel-label');
   const labelCount = await labels.count();

@@ -1,8 +1,23 @@
 const { launchBrowser } = require('./helpers');
+const { execFileSync } = require('child_process');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
+
+function queryDb(sql) {
+  return execFileSync('docker', [
+    'exec',
+    'glpi-db',
+    'mariadb',
+    '-uglpi',
+    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    'glpi',
+    '-N',
+    '-e',
+    sql,
+  ], { encoding: 'utf8' }).trim();
+}
 
 async function selectValue(page, name, value, label) {
   await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
@@ -51,8 +66,11 @@ async function selectValue(page, name, value, label) {
   await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
   const firstPortHref = await page.locator('.patchpanel-port').first().getAttribute('href');
   await page.goto(new URL(firstPortHref, baseUrl).toString(), { waitUntil: 'networkidle' });
-  await selectValue(page, 'rear_items_id', 254, '123');
-  await selectValue(page, 'front_items_id', 359, 'NLH-F01-IDF-A-SW01 - Gi1/0/25');
+  queryDb(
+    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
+  );
+  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -105,8 +123,8 @@ async function selectValue(page, name, value, label) {
     empty_results: emptyResultCount,
     search_results: searchResultCount,
     search_has_panel: searchBody.includes(panelName),
-    search_has_endpoint: searchBody.includes('123'),
-    search_has_access_switch: searchBody.includes('NLH-F01-IDF-A-SW01'),
+    search_has_endpoint: searchBody.includes('NLH-R0201-WA01'),
+    search_has_access_switch: searchBody.includes('NLH-F01-IDF-B-SW01'),
     search_has_core: searchFullText.includes('NLH-MDF-CORE-SW01'),
     route_more: routeMoreCount >= 1,
     search_has_impact_link: Boolean(impactHref) && Boolean(impactLabel),

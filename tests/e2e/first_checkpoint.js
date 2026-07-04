@@ -1,8 +1,23 @@
 const { launchBrowser } = require('./helpers');
+const { execFileSync } = require('child_process');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
+
+function queryDb(sql) {
+  return execFileSync('docker', [
+    'exec',
+    'glpi-db',
+    'mariadb',
+    '-uglpi',
+    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    'glpi',
+    '-N',
+    '-e',
+    sql,
+  ], { encoding: 'utf8' }).trim();
+}
 
 async function selectValue(page, name, value, label) {
   const selector = `select[name="${name}"]`;
@@ -159,9 +174,11 @@ async function selectValue(page, name, value, label) {
     }).count(),
   };
 
+  queryDb(
+    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
+  );
   await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
   await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
-  await selectValue(page, 'rear_cable_color', '#0d6efd', 'Blue');
   await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
   await page.fill('input[name="front_cable_label"]', 'CP-V2-E2E');
   await page.locator('button[name="update"], input[name="update"]').click();
@@ -273,8 +290,7 @@ async function selectValue(page, name, value, label) {
     ].includes(key))
     .every(([, value]) => value === true);
   const expectedZones = [
-    'endpoint', 'endpoint', 'connection', 'panel', 'panel', 'access', 'access',
-    'access', 'core', 'core', 'core', 'gateway', 'gateway',
+    'endpoint', 'connection', 'panel', 'panel', 'access', 'access', 'core', 'core', 'gateway',
   ];
   if (
     result.list_status !== 200
@@ -288,12 +304,12 @@ async function selectValue(page, name, value, label) {
     || Object.values(result.hidden_daily_tools).some(count => count !== 0)
     || result.visual_port_count !== 24
     || result.visual_columns !== 24
-    || result.overview_cards.length !== 4
+    || result.overview_cards.length !== 3
     || !result.overview_cards.some(card => card.includes('Free') && card.includes('24'))
     || result.quick_actions.routes < 1
     || result.quick_actions.health !== 0
     || result.quick_actions.audit < 1
-    || result.quick_actions.labels < 1
+    || result.quick_actions.labels !== 0
     || !result.legacy_notice_hidden
     || !result.port_workflow.visible
     || !result.port_workflow.status.includes('Free')

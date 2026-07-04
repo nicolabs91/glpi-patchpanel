@@ -58,6 +58,16 @@
     text-decoration: none;
 }
 
+.patchpanel-legend-item {
+    flex: 0 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
+}
+
+.patchpanel-legend-item i {
+    flex: 0 0 auto;
+}
+
 .patchpanel-route-legend {
     display: flex;
     flex-wrap: wrap;
@@ -199,7 +209,14 @@
 }
 
 .patchpanel-status-partial {
-    --patchpanel-status-color: #f59f00;
+    --patchpanel-status-color: #ced4da;
+}
+
+.patchpanel-legend-item.patchpanel-status-partial,
+.patchpanel-port.patchpanel-status-partial {
+    background: #e9ecef;
+    border-color: #ced4da;
+    color: #1f2328;
 }
 
 .patchpanel-status-attention {

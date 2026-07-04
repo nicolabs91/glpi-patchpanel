@@ -48,7 +48,7 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
       integrity: body.includes('Data integrity'),
     },
     row_count: rows.length,
-    missing: rows.filter(row => row.includes('Missing')),
+    missing: rows.filter(row => row.includes('Missing') && row.includes('Needs attention')),
     needs_attention: rows.filter(row => row.includes('Needs attention')),
     browser_errors: browserErrors,
   };

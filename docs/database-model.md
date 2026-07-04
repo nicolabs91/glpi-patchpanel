@@ -83,8 +83,9 @@ checkpoint before relying on it in the UI.
 
 - A panel port can have at most one `rear` endpoint and one `front` endpoint.
 - A socket or network port can be used by at most one panel endpoint.
-- Broken references must stay visible as warnings; silent deletion hides cabling
-  problems.
+- Broken references must remain detectable by health checks; the visual panel
+  keeps the daily status set focused on free, not connected, and connected
+  ports.
 - Deleting a panel port deletes its plugin endpoint rows.
 - Deleting or purging test panels must leave no plugin endpoints or active
   import batches behind.

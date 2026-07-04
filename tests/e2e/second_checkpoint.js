@@ -1,8 +1,23 @@
 const { launchBrowser } = require('./helpers');
+const { execFileSync } = require('child_process');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
+
+function queryDb(sql) {
+  return execFileSync('docker', [
+    'exec',
+    'glpi-db',
+    'mariadb',
+    '-uglpi',
+    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    'glpi',
+    '-N',
+    '-e',
+    sql,
+  ], { encoding: 'utf8' }).trim();
+}
 
 async function selectValue(page, name, value, label) {
   await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
@@ -67,6 +82,9 @@ async function selectValue(page, name, value, label) {
   await page.fill('input[name="label"]', 'Rack A-03');
   await selectValue(page, 'operational_state', 'reserved', 'Reserved');
   await selectValue(page, 'media', 'fiber-mm', 'Multimode fiber');
+  queryDb(
+    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
+  );
   await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
   await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
   await page.locator('button[name="update"]').click();
@@ -141,7 +159,8 @@ async function selectValue(page, name, value, label) {
     fiberModelId,
     '24-port multimode fiber, 1U',
   );
-  await page.locator('input[name="apply_model"][value="1"]').check();
+  const applyModelTextVisible = (await page.locator('body').innerText())
+    .includes('Replace port count, rows and media with the selected model when saving.');
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -185,6 +204,7 @@ async function selectValue(page, name, value, label) {
       && routeBody.includes('NLH-F01-IDF-B-SW01'),
     bulk_ui_removed: !visualBody.includes('Bulk port management'),
     bulk_route_status: bulkRouteResponse.status(),
+    apply_model_text_removed: !applyModelTextVisible,
     cleanup_status: cleanupResponse.status(),
     existing_panel_model_override: overrideApplied,
     override_cleanup_status: overrideCleanup.status(),
@@ -208,6 +228,7 @@ async function selectValue(page, name, value, label) {
     || !result.route_preserved
     || !result.bulk_ui_removed
     || result.bulk_route_status !== 404
+    || !result.apply_model_text_removed
     || ![200, 302, 303].includes(result.cleanup_status)
     || result.existing_panel_model_override.port_count !== '24'
     || result.existing_panel_model_override.rows !== '1'

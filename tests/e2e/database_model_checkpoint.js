@@ -119,7 +119,7 @@ const brokenNetworkPortReferences = scalar(`
 const invalidPanelPortStateOrMedia = scalar(`
   SELECT COUNT(*) AS count
   FROM glpi_plugin_patchpanel_panelports
-  WHERE operational_state NOT IN ('active', 'reserved', 'fault', 'disabled')
+  WHERE operational_state NOT IN ('active', 'reserved')
      OR media NOT IN ('copper', 'fiber-sm', 'fiber-mm', 'other')
 `, 'count');
 

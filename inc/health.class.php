@@ -162,10 +162,39 @@ final class PluginPatchpanelHealth
                 __('Reconnect the front side to an existing GLPI network port or clear the endpoint.', 'patchpanel')
             ),
             self::countCheck(
+                __('Missing native network port links', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_panelports p
+                 INNER JOIN glpi_plugin_patchpanel_portendpoints rear
+                   ON rear.plugin_patchpanel_panelports_id = p.id
+                  AND rear.side = 'rear'
+                  AND rear.itemtype = 'Glpi\\\\Socket'
+                 INNER JOIN glpi_sockets s
+                   ON s.id = rear.items_id
+                  AND s.networkports_id > 0
+                 INNER JOIN glpi_plugin_patchpanel_portendpoints front
+                   ON front.plugin_patchpanel_panelports_id = p.id
+                  AND front.side = 'front'
+                  AND front.itemtype = 'NetworkPort'
+                 INNER JOIN glpi_networkports np
+                   ON np.id = front.items_id
+                  AND np.is_deleted = 0
+                 LEFT JOIN glpi_networkports_networkports nn
+                   ON (
+                     nn.networkports_id_1 = front.items_id
+                     AND nn.networkports_id_2 = s.networkports_id
+                   ) OR (
+                     nn.networkports_id_2 = front.items_id
+                     AND nn.networkports_id_1 = s.networkports_id
+                   )
+                 WHERE nn.id IS NULL",
+                __('Save the affected panel port or socket again so GLPI Connected to matches PatchPanel.', 'patchpanel')
+            ),
+            self::countCheck(
                 __('Invalid panel port state or media', 'patchpanel'),
                 "SELECT COUNT(*) AS count
                  FROM glpi_plugin_patchpanel_panelports
-                 WHERE operational_state NOT IN ('active', 'reserved', 'fault', 'disabled')
+                 WHERE operational_state NOT IN ('active', 'reserved')
                     OR media NOT IN ('copper', 'fiber-sm', 'fiber-mm', 'other')",
                 __('Normalize panel port state and media values before rendering panel and health views.', 'patchpanel')
             ),

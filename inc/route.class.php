@@ -60,7 +60,7 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $frontPortId = (int) $endpoints[PluginPatchpanelPortEndpoint::FRONT]['items_id'];
             $frontPort = new NetworkPort();
             if ($frontPort->getFromDB($frontPortId)) {
-                if ($result['terminal'] === null) {
+                if ($result['terminal'] === null && $result['rear'] === null) {
                     $peerId = (new NetworkPort_NetworkPort())->getOppositeContact($frontPortId);
                     if ($peerId) {
                         $peerPort = new NetworkPort();
@@ -167,6 +167,56 @@ final class PluginPatchpanelRoute extends CommonGLPI
         return self::$ownerStepCache[$cacheKey] = $owner->getFromDB($id) && $owner->canViewItem()
             ? self::stepForItem($owner)
             : null;
+    }
+
+    private static function stepWithPortDetail(array $ownerStep, array $portStep): array
+    {
+        $ownerLabel = trim((string) ($ownerStep['label'] ?? ''));
+        $portLabel = trim((string) ($portStep['label'] ?? ''));
+        $combined = $ownerStep;
+        $combined['label'] = trim($ownerLabel . ($portLabel !== '' ? ' · ' . $portLabel : ''));
+        $combined['port'] = $portStep;
+        $combined['broken'] = !empty($ownerStep['broken']) || !empty($portStep['broken']);
+        $combined['references'] = [
+            [
+                'type' => $ownerStep['type'] ?? '',
+                'id' => (int) ($ownerStep['id'] ?? 0),
+                'label' => $ownerLabel,
+            ],
+            [
+                'type' => $portStep['type'] ?? '',
+                'id' => (int) ($portStep['id'] ?? 0),
+                'label' => $portLabel,
+            ],
+        ];
+        return $combined;
+    }
+
+    private static function stepForNetworkPortWithOwner(array $portStep): array
+    {
+        if (($portStep['type'] ?? '') !== NetworkPort::class || !empty($portStep['broken'])) {
+            return $portStep;
+        }
+
+        $port = new NetworkPort();
+        if (!$port->getFromDB((int) ($portStep['id'] ?? 0))) {
+            return $portStep;
+        }
+
+        $owner = self::stepForOwner($port);
+        return $owner ? self::stepWithPortDetail($owner, $portStep) : $portStep;
+    }
+
+    private static function zoneForOwnerStep(?array $owner, string $fallback): string
+    {
+        if (
+            $owner
+            && ($owner['type'] ?? '') === NetworkEquipment::class
+            && self::isRouterOrFirewall((int) ($owner['id'] ?? 0))
+        ) {
+            return 'gateway';
+        }
+        return $fallback;
     }
 
     private static function findUpstreamPath(NetworkPort $frontPort): array
@@ -325,9 +375,13 @@ final class PluginPatchpanelRoute extends CommonGLPI
     {
         $steps = [];
         if ($route['terminal']) {
-            $steps[] = self::withZone($route['terminal'], 'endpoint');
             if (!empty($route['terminal']['port'])) {
-                $steps[] = self::withZone($route['terminal']['port'], 'endpoint');
+                $steps[] = self::withZone(
+                    self::stepWithPortDetail($route['terminal'], $route['terminal']['port']),
+                    'endpoint'
+                );
+            } else {
+                $steps[] = self::withZone($route['terminal'], 'endpoint');
             }
         }
         if ($route['rear']) {
@@ -340,21 +394,8 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $steps[] = self::withZone($route['port'], 'panel');
         }
         if ($route['front']) {
-            $steps[] = self::withZone($route['front'], 'access');
-        }
-
-        if ($route['front'] && $route['front']['type'] === NetworkPort::class) {
-            $frontPort = new NetworkPort();
-            if ($frontPort->getFromDB($route['front']['id'])) {
-                $owner = self::stepForOwner($frontPort);
-                if ($owner) {
-                    $zone = $owner['type'] === NetworkEquipment::class
-                        && self::isRouterOrFirewall((int) $owner['id'])
-                        ? 'gateway'
-                        : 'access';
-                    $steps[] = self::withZone($owner, $zone);
-                }
-            }
+            $front = self::stepForNetworkPortWithOwner($route['front']);
+            $steps[] = self::withZone($front, self::zoneForOwnerStep($front, 'access'));
         }
 
         $upstream = array_values($route['upstream']);
@@ -367,12 +408,21 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $fromZone = $index === 0 ? 'access' : 'core';
             $toZone = $isLastEdge && $endsAtGateway ? 'gateway' : 'core';
             if (isset($edge[0])) {
-                $steps[] = self::withZone($edge[0], $fromZone, true);
+                $steps[] = self::withZone(
+                    self::stepForNetworkPortWithOwner($edge[0]),
+                    $fromZone,
+                    true
+                );
             }
-            if (isset($edge[1])) {
-                $steps[] = self::withZone($edge[1], $toZone, true);
-            }
-            if (isset($edge[2])) {
+            if (isset($edge[1], $edge[2])) {
+                $steps[] = self::withZone(
+                    self::stepWithPortDetail($edge[2], $edge[1]),
+                    $toZone,
+                    true
+                );
+            } elseif (isset($edge[1])) {
+                $steps[] = self::withZone(self::stepForNetworkPortWithOwner($edge[1]), $toZone, true);
+            } elseif (isset($edge[2])) {
                 $steps[] = self::withZone($edge[2], $toZone, true);
             }
         }

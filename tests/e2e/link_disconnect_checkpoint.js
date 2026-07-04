@@ -4,6 +4,11 @@ const { launchBrowser } = require('./helpers');
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
+const TEST_SOCKET_ID = 254;
+const TEST_TERMINAL_PORT_ID = 219;
+const TEST_TERMINAL_ITEM_ID = 3;
+const TEST_FRONT_PORT_ID = 255;
+const TEST_FRONT_ITEM_ID = 22;
 
 async function selectValue(page, name, value, label) {
   await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
@@ -35,6 +40,12 @@ function resetAp001Route() {
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
   );
   queryDb(
+    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
+  );
+  queryDb(
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217)"
+  );
+  queryDb(
     "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
   );
   queryDb(
@@ -42,6 +53,15 @@ function resetAp001Route() {
   );
   queryDb(
     "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
+  );
+}
+
+function restoreDemoNativeLinks() {
+  queryDb(
+    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224, 219, 228) OR networkports_id_2 IN (217, 224, 219, 228)"
+  );
+  queryDb(
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217), (228, 219)"
   );
 }
 
@@ -101,9 +121,7 @@ async function openTabByText(page, text) {
       networkports_id: after[2] ?? '',
     };
   } finally {
-    queryDb(
-      "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
-    );
+    resetAp001Route();
   }
 
   try {
@@ -140,15 +158,7 @@ async function openTabByText(page, text) {
       networkports_id: afterSocket[2] ?? '',
     };
   } finally {
-    queryDb(
-      "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
-    );
-    queryDb(
-      "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'rear'"
-    );
-    queryDb(
-      "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
-    );
+    resetAp001Route();
   }
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
@@ -167,10 +177,34 @@ async function openTabByText(page, text) {
   await page.goto(new URL(portHref, baseUrl).toString(), { waitUntil: 'networkidle' });
   const portId = Number(new URL(page.url()).searchParams.get('id'));
 
-  await selectValue(page, 'rear_items_id', 254, '123');
-  await selectValue(page, 'front_items_id', 359, 'NLH-F01-IDF-A-SW01 - Gi1/0/25');
+  queryDb(
+    `UPDATE glpi_sockets
+     SET itemtype = 'NetworkEquipment',
+         items_id = ${TEST_TERMINAL_ITEM_ID},
+         networkports_id = ${TEST_TERMINAL_PORT_ID}
+     WHERE id = ${TEST_SOCKET_ID}`
+  );
+  queryDb(
+    `DELETE FROM glpi_networkports_networkports
+     WHERE networkports_id_1 IN (${TEST_TERMINAL_PORT_ID}, ${TEST_FRONT_PORT_ID})
+        OR networkports_id_2 IN (${TEST_TERMINAL_PORT_ID}, ${TEST_FRONT_PORT_ID})`
+  );
+
+  await selectValue(page, 'rear_items_id', TEST_SOCKET_ID, '123');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
+  const terminalPortId = queryDb(`SELECT networkports_id FROM glpi_sockets WHERE id = ${TEST_SOCKET_ID}`);
+  const nativeLinkAfterSave = queryDb(
+    `SELECT CASE
+       WHEN networkports_id_1 = ${TEST_FRONT_PORT_ID} THEN networkports_id_2
+       WHEN networkports_id_2 = ${TEST_FRONT_PORT_ID} THEN networkports_id_1
+       ELSE 0
+     END
+     FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}
+     LIMIT 1`
+  );
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
     waitUntil: 'networkidle',
@@ -196,9 +230,9 @@ async function openTabByText(page, text) {
         label: 'Should not be saved',
         operational_state: 'active',
         media: 'copper',
-        rear_items_id: '254',
+        rear_items_id: String(TEST_SOCKET_ID),
         rear_cable_color: '',
-        front_items_id: '359',
+        front_items_id: String(TEST_FRONT_PORT_ID),
         front_cable_color: '',
         front_cable_label: '',
         update: '1',
@@ -210,10 +244,10 @@ async function openTabByText(page, text) {
   const duplicateDirectPost = {
     status: duplicatePost.status(),
     duplicate_socket_count: queryDb(
-      "SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 254"
+      `SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = ${TEST_SOCKET_ID}`
     ),
     duplicate_networkport_count: queryDb(
-      "SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'NetworkPort' AND items_id = 359"
+      `SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'NetworkPort' AND items_id = ${TEST_FRONT_PORT_ID}`
     ),
     second_port_endpoint_count: queryDb(
       `SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = ${duplicatePortId}`
@@ -238,7 +272,7 @@ async function openTabByText(page, text) {
     },
   );
 
-  await page.goto(`${baseUrl}/front/socket.form.php?id=254`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/front/socket.form.php?id=${TEST_SOCKET_ID}`, { waitUntil: 'networkidle' });
   await openTabByText(page, /Patch panel routes/i);
   const socketCard = page.locator('.patchpanel-endpoint-route').filter({ hasText: panelName }).first();
   await socketCard.waitFor({ state: 'visible' });
@@ -258,8 +292,12 @@ async function openTabByText(page, text) {
     rear: await page.locator('select[name="rear_items_id"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
+  const nativeLinkAfterRearDisconnect = queryDb(
+    `SELECT COUNT(*) FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+  );
 
-  await page.goto(`${baseUrl}/front/networkequipment.form.php?id=21`, {
+  await page.goto(`${baseUrl}/front/networkequipment.form.php?id=${TEST_FRONT_ITEM_ID}`, {
     waitUntil: 'networkidle',
   });
   await openTabByText(page, /Patch panel routes/i);
@@ -299,7 +337,10 @@ async function openTabByText(page, text) {
     panel_id: panelId,
     port_id: portId,
     socket_actions: socketActions,
+    native_link_after_save: nativeLinkAfterSave,
+    terminal_port_id: terminalPortId,
     after_rear_disconnect: afterRearDisconnect,
+    native_link_after_rear_disconnect: nativeLinkAfterRearDisconnect,
     device_actions: deviceActions,
     after_front_disconnect: afterFrontDisconnect,
     ap001_device_disconnect: ap001DeviceDisconnect,
@@ -309,6 +350,7 @@ async function openTabByText(page, text) {
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
+  restoreDemoNativeLinks();
   await browser.close();
 
   if (
@@ -317,7 +359,9 @@ async function openTabByText(page, text) {
     || result.socket_actions.manage !== 1
     || result.socket_actions.disconnect !== 1
     || result.after_rear_disconnect.rear !== '0'
-    || result.after_rear_disconnect.front !== '359'
+    || result.after_rear_disconnect.front !== String(TEST_FRONT_PORT_ID)
+    || result.native_link_after_save !== result.terminal_port_id
+    || result.native_link_after_rear_disconnect !== '0'
     || !result.device_actions.side
     || !result.device_actions.connection_details
     || result.device_actions.manage !== 1

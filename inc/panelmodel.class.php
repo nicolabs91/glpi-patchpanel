@@ -76,7 +76,11 @@ class PluginPatchpanelPanelModel extends CommonDropdown
         echo '</td></tr>';
 
         echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . "</td><td colspan='3'>";
-        echo Html::textarea(['name' => 'comment', 'value' => $this->fields['comment'] ?? '']);
+        Html::textarea([
+            'name' => 'comment',
+            'value' => $this->fields['comment'] ?? '',
+            'rows' => 8,
+        ]);
         echo '</td></tr>';
 
         $this->showFormButtons($options);

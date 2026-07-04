@@ -24,6 +24,12 @@ function resetAp001Route() {
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
   );
   queryDb(
+    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
+  );
+  queryDb(
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217)"
+  );
+  queryDb(
     "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
   );
   queryDb(
@@ -31,6 +37,12 @@ function resetAp001Route() {
   );
   queryDb(
     "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
+  );
+  queryDb(
+    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'front'"
+  );
+  queryDb(
+    "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'front', 'NetworkPort', 224, 0, NULL, NULL, NOW(), NOW())"
   );
 }
 
@@ -143,20 +155,18 @@ function resetAp001Route() {
       },
       route_start: routeSteps.slice(0, 3),
       terminal_matches_socket:
-        routeSteps[0]?.text === selectedSocketItemLabel.trim()
+        routeSteps[0]?.text === `${selectedSocketItemLabel.trim()} · ${selectedSocketPortLabel.trim()}`
         && routeSteps[0]?.href?.includes(`/front/networkequipment.form.php?id=${socketSelection.item}`)
-        && routeSteps[1]?.text === selectedSocketPortLabel.trim()
-        && routeSteps[1]?.href?.includes(`/front/networkport.form.php?id=${socketSelection.networkport}`)
-        && routeSteps[2]?.text.includes('NLH-R0101-WA-TV01')
-        && routeSteps[2]?.href?.includes('id=86'),
+        && routeSteps[1]?.text.includes('NLH-R0101-WA-TV01')
+        && routeSteps[1]?.href?.includes('id=86'),
       port_form_uses_physical_route_for_terminal:
         !connectedPortFormText.includes('End device on endpoint')
         && !connectedPortFormText.includes('Disconnect end device from endpoint')
         && connectedPortFormText.includes('Physical route')
         && connectedPortFormText.includes('NLH-R0101-TV01'),
       connected_route_keeps_upstream:
-        connectedRouteFullText.includes('NLH-MDF-CORE-SW01')
-        && connectedRouteFullText.includes('NLH-MDF-FW01')
+        connectedRouteFullText.includes('NLH-F01-IDF-A-SW01')
+        && connectedRouteFullText.includes('PP-L1-IDF-A')
         && connectedRouteMoreCollapsed,
       networkport_tab_matches_socket_route:
         networkPortRouteCards >= 1

@@ -27,8 +27,6 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         $options = [
             'active' => __('Active'),
             'reserved' => __('Reserved', 'patchpanel'),
-            'fault' => __('Fault', 'patchpanel'),
-            'disabled' => __('Out of service', 'patchpanel'),
         ];
         return $includeEmpty ? ['' => __('Keep current value', 'patchpanel')] + $options : $options;
     }
@@ -170,11 +168,8 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         echo "<div class='patchpanel-legend' aria-label='" . htmlescape(__('Status legend', 'patchpanel')) . "'>";
         foreach ([
             'free' => __('Free', 'patchpanel'),
-            'partial' => __('Incomplete', 'patchpanel'),
+            'partial' => __('Not connected', 'patchpanel'),
             'connected' => __('Connected', 'patchpanel'),
-            'warning' => __('Broken reference', 'patchpanel'),
-            'disabled' => __('Out of service', 'patchpanel'),
-            'fault' => __('Fault', 'patchpanel'),
         ] as $status => $label) {
             echo "<span class='patchpanel-legend-item patchpanel-status-$status'>";
             echo "<i class='" . self::getStatusIcon($status) . "'></i> " . htmlescape($label);
@@ -198,15 +193,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 (int) $panel->getID()
             ) . "'>";
         echo "<i class='ti ti-history'></i> " .
-            htmlescape(__('Audit history', 'patchpanel')) . '</a>';
-        echo "<a class='btn btn-outline-primary' href='" .
-            htmlescape(
-                $CFG_GLPI['root_doc'] .
-                '/plugins/patchpanel/front/labels.php?panel_id=' .
-                (int) $panel->getID()
-            ) . "'>";
-        echo "<i class='ti ti-qrcode'></i> " .
-            htmlescape(__('Print QR labels', 'patchpanel')) . '</a></div>';
+            htmlescape(__('Audit history', 'patchpanel')) . '</a></div>';
 
         $columns = (int) ceil(
             (int) $panel->fields['port_count'] / max(1, (int) $panel->fields['rows'])
@@ -241,9 +228,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         $counts = self::getStatusCountsForPanel((int) $panel->getID());
         $total = max(1, (int) $panel->fields['port_count']);
         $connected = (int) ($counts['connected'] ?? 0);
-        $attention = (int) ($counts['partial'] ?? 0)
-            + (int) ($counts['warning'] ?? 0)
-            + (int) ($counts['fault'] ?? 0);
+        $notConnected = (int) ($counts['partial'] ?? 0);
 
         echo "<section class='patchpanel-panel-overview mb-3'>";
         foreach ([
@@ -257,15 +242,10 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 (int) ($counts['free'] ?? 0),
                 __('Available ports', 'patchpanel'),
             ],
-            'attention' => [
-                __('Needs attention', 'patchpanel'),
-                $attention,
-                __('Incomplete, broken or faulty', 'patchpanel'),
-            ],
-            'disabled' => [
-                __('Out of service', 'patchpanel'),
-                (int) ($counts['disabled'] ?? 0),
-                __('Disabled ports', 'patchpanel'),
+            'partial' => [
+                __('Not connected', 'patchpanel'),
+                $notConnected,
+                __('One side is not linked yet', 'patchpanel'),
             ],
         ] as $status => [$label, $count, $hint]) {
             echo "<div class='patchpanel-overview-card patchpanel-status-" . htmlescape($status) . "'>";
@@ -283,9 +263,6 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             'free' => 0,
             'partial' => 0,
             'connected' => 0,
-            'warning' => 0,
-            'disabled' => 0,
-            'fault' => 0,
         ];
         foreach (self::getDisplayStatusMapForRows(self::getPanelStatusRows($panelId)) as $status) {
             if (isset($counts[$status])) {
@@ -328,7 +305,8 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             $statuses[$portId] = self::getDisplayStatusFromCounts(
                 (string) ($row['operational_state'] ?? ''),
                 (int) ($counts[$portId]['endpoint_count'] ?? 0),
-                (int) ($counts[$portId]['broken_count'] ?? 0)
+                (int) ($counts[$portId]['broken_count'] ?? 0),
+                (int) ($counts[$portId]['complete_count'] ?? 0)
             );
         }
         return $statuses;
@@ -358,7 +336,11 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                                WHEN e.itemtype NOT IN ('$socketType', '$networkPortType') THEN 1
                                ELSE 0
                            END
-                       ) AS broken_count
+                       ) AS broken_count,
+                       SUM(CASE WHEN e.side = 'rear' AND s.networkports_id > 0 THEN 1 ELSE 0 END)
+                           AS rear_terminal_count,
+                       SUM(CASE WHEN e.side = 'front' AND np.id IS NOT NULL AND np.is_deleted = 0 THEN 1 ELSE 0 END)
+                           AS front_count
                 FROM `$endpointTable` e
                 LEFT JOIN `glpi_sockets` s
                     ON e.itemtype = '$socketType' AND s.id = e.items_id
@@ -373,6 +355,10 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             $counts[(int) $row['port_id']] = [
                 'endpoint_count' => (int) ($row['endpoint_count'] ?? 0),
                 'broken_count' => (int) ($row['broken_count'] ?? 0),
+                'complete_count' => min(
+                    (int) ($row['rear_terminal_count'] ?? 0),
+                    (int) ($row['front_count'] ?? 0)
+                ),
             ];
         }
         return $counts;
@@ -380,42 +366,23 @@ class PluginPatchpanelPanelPort extends CommonDBChild
 
     private static function getDisplayStatusFromRoute(array $fields, array $route): string
     {
-        if (($fields['operational_state'] ?? '') === 'disabled') {
-            return 'disabled';
-        }
-        if (($fields['operational_state'] ?? '') === 'fault') {
-            return 'fault';
-        }
-        if ($route['has_broken_reference']) {
-            return 'warning';
-        }
         $count = (int) isset($route['rear']) + (int) isset($route['front']);
-        return match ($count) {
-            0 => 'free',
-            1 => 'partial',
-            default => 'connected',
-        };
+        if ($count === 0) {
+            return 'free';
+        }
+        return $route['rear'] && $route['front'] && $route['terminal'] ? 'connected' : 'partial';
     }
 
     private static function getDisplayStatusFromCounts(
         string $operationalState,
         int $endpointCount,
-        int $brokenCount
+        int $brokenCount,
+        int $completeCount
     ): string {
-        if ($operationalState === 'disabled') {
-            return 'disabled';
+        if ($endpointCount === 0) {
+            return 'free';
         }
-        if ($operationalState === 'fault') {
-            return 'fault';
-        }
-        if ($brokenCount > 0) {
-            return 'warning';
-        }
-        return match ($endpointCount) {
-            0 => 'free',
-            1 => 'partial',
-            default => 'connected',
-        };
+        return $completeCount > 0 ? 'connected' : 'partial';
     }
 
     public static function getStatusIcon(string $status): string
@@ -423,10 +390,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         return match ($status) {
             'connected' => 'ti ti-circle-check',
             'attention' => 'ti ti-alert-circle',
-            'partial' => 'ti ti-alert-triangle',
-            'warning' => 'ti ti-link-off',
-            'disabled' => 'ti ti-ban',
-            'fault' => 'ti ti-tool',
+            'partial' => 'ti ti-circle-dashed',
             default => 'ti ti-circle-dashed',
         };
     }
@@ -435,10 +399,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
     {
         return match ($status) {
             'connected' => __('Connected', 'patchpanel'),
-            'partial' => __('Incomplete', 'patchpanel'),
-            'warning' => __('Broken reference', 'patchpanel'),
-            'disabled' => __('Out of service', 'patchpanel'),
-            'fault' => __('Fault', 'patchpanel'),
+            'partial' => __('Not connected', 'patchpanel'),
             default => __('Free', 'patchpanel'),
         };
     }
@@ -468,7 +429,11 @@ class PluginPatchpanelPanelPort extends CommonDBChild
 
         PluginPatchpanelPortEndpoint::showEndpointFields((int) $this->getID());
         echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . "</td><td colspan='3'>";
-        echo Html::textarea(['name' => 'comment', 'value' => $this->fields['comment'] ?? '']);
+        Html::textarea([
+            'name' => 'comment',
+            'value' => $this->fields['comment'] ?? '',
+            'rows' => 8,
+        ]);
         echo '</td></tr>';
 
         $this->showFormButtons($options);

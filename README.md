@@ -32,9 +32,9 @@ not require a second cleanup step. If a stale endpoint device selection is
 opened in GLPI's native socket form, PatchPanel also prevents GLPI's network
 port dropdown from re-saving the old device as a connection.
 
-The second checkpoint adds managed panel models. Selecting a model on a new
-panel applies its port count, rows, and media. Existing panels require the explicit
-`Apply model layout` checkbox, preventing accidental layout replacement.
+The second checkpoint adds managed panel models. Selecting a model applies its
+port count, rows, and media when the panel is saved, without requiring a separate
+layout override control in the daily form.
 
 The daily UI focuses on the cabling workflow. CSV import and health checks are
 available from the plugin settings page instead of the normal PatchPanel list or
