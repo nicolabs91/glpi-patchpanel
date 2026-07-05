@@ -90,10 +90,10 @@ function resetAp001Route() {
     const connectedRouteFullText = await page.locator('.patchpanel-route').evaluate(element =>
       element.textContent.replace(/\s+/g, ' ').trim()
     );
-    const connectedRouteMoreCollapsed = await page.locator('.patchpanel-route-more').evaluate(element => !element.open);
     const routeSteps = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
       steps.map(step => ({
         text: step.textContent.trim(),
+        zone: step.getAttribute('data-route-zone'),
         href: step.getAttribute('href'),
       }))
     );
@@ -164,10 +164,15 @@ function resetAp001Route() {
         && !connectedPortFormText.includes('Disconnect end device from endpoint')
         && connectedPortFormText.includes('Physical route')
         && connectedPortFormText.includes('NLH-R0101-TV01'),
-      connected_route_keeps_upstream:
+      connected_route_stops_at_access_switch:
         connectedRouteFullText.includes('NLH-F01-IDF-A-SW01')
         && connectedRouteFullText.includes('PP-L1-IDF-A')
-        && connectedRouteMoreCollapsed,
+        && routeSteps[4]?.text.includes('NLH-F01-IDF-A-SW01')
+        && routeSteps[4]?.zone === 'access'
+        && !routeSteps.slice(5).some(step =>
+          step.text.includes('NLH-R0101-TV01')
+          || step.href?.includes(`/front/networkequipment.form.php?id=${socketSelection.item}`)
+        ),
       networkport_tab_matches_socket_route:
         networkPortRouteCards >= 1
         && networkPortTabText.includes('PP-L1-IDF-A')
@@ -204,7 +209,7 @@ function resetAp001Route() {
       || !socketSelection.networkport
       || !result.terminal_matches_socket
       || !result.port_form_uses_physical_route_for_terminal
-      || !result.connected_route_keeps_upstream
+      || !result.connected_route_stops_at_access_switch
       || !result.networkport_tab_matches_socket_route
       || !result.disconnected_socket_ignored
       || !result.disconnected_port_form_ignores_stale_socket_device

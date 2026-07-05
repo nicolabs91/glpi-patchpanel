@@ -291,7 +291,24 @@ final class PluginPatchpanelRoute extends CommonGLPI
                   AND own.items_id = " . $equipmentId . "
                   AND own.is_deleted = 0
                   AND peer.itemtype = 'NetworkEquipment'
-                  AND peer.is_deleted = 0";
+                  AND peer.is_deleted = 0
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM " . PluginPatchpanelPortEndpoint::getTable() . " front
+                    INNER JOIN " . PluginPatchpanelPortEndpoint::getTable() . " rear
+                      ON rear.plugin_patchpanel_panelports_id = front.plugin_patchpanel_panelports_id
+                     AND rear.side = 'rear'
+                     AND rear.itemtype = 'Glpi\\\\Socket'
+                    INNER JOIN glpi_sockets socket
+                      ON socket.id = rear.items_id
+                     AND socket.networkports_id > 0
+                    WHERE front.side = 'front'
+                      AND front.itemtype = 'NetworkPort'
+                      AND (
+                        (front.items_id = own.id AND socket.networkports_id = peer.id)
+                        OR (front.items_id = peer.id AND socket.networkports_id = own.id)
+                      )
+                  )";
 
         $rows = [];
         $result = $DB->doQuery($sql);

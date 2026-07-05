@@ -2,6 +2,14 @@
 
 ## 0.1.1 - 2026-07-04
 
+- Added a corrupt-data e2e checkpoint that injects broken socket references,
+  broken network-port references and invalid endpoint types, verifies the health
+  warnings, and proves route views keep rendering instead of crashing.
+- Added a route-consistency e2e checkpoint that compares the same route across
+  the panel-port form, route explorer, endpoint tab and impact filter.
+- Fixed route building so PatchPanel's native front-to-socket endpoint link is
+  not counted as an upstream/core network edge and cannot loop the physical
+  route back to the endpoint device.
 - Resynced native GLPI `Connected to` links when a socket endpoint is saved,
   and added a health check for missing native links so PatchPanel and the GLPI
   switch-port overview cannot silently drift apart.
