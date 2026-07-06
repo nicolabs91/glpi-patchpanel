@@ -203,6 +203,7 @@ class PluginPatchpanelPanel extends CommonDBTM
             $DB->delete(PluginPatchpanelPortEndpoint::getTable(), [
                 'plugin_patchpanel_panelports_id' => $portIds,
             ]);
+            PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts($portIds);
             $DB->delete(PluginPatchpanelPanelPort::getTable(), ['id' => $portIds]);
         }
     }

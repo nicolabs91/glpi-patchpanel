@@ -178,6 +178,40 @@ async function openTabByText(page, text) {
   const portId = Number(new URL(page.url()).searchParams.get('id'));
 
   queryDb(
+    `DELETE FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID}
+        OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+  );
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
+  await page.locator('button[name="update"], input[name="update"]').click();
+  await page.waitForLoadState('networkidle');
+  const shadowPortIdAfterFrontOnly = queryDb(
+    `SELECT id
+     FROM glpi_networkports
+     WHERE itemtype = 'PluginPatchpanelPanelPort'
+       AND items_id = ${portId}
+       AND is_deleted = 0
+     LIMIT 1`
+  );
+  const nativeLinkAfterFrontOnly = queryDb(
+    `SELECT CASE
+       WHEN networkports_id_1 = ${TEST_FRONT_PORT_ID} THEN networkports_id_2
+       WHEN networkports_id_2 = ${TEST_FRONT_PORT_ID} THEN networkports_id_1
+       ELSE 0
+     END
+     FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}
+     LIMIT 1`
+  );
+  await page.goto(`${baseUrl}/front/networkport.form.php?id=${TEST_FRONT_PORT_ID}`, {
+    waitUntil: 'networkidle',
+  });
+  const switchPortFormAfterFrontOnly = await page.locator('body').innerText();
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
+    waitUntil: 'networkidle',
+  });
+
+  queryDb(
     `UPDATE glpi_sockets
      SET itemtype = 'NetworkEquipment',
          items_id = ${TEST_TERMINAL_ITEM_ID},
@@ -337,6 +371,11 @@ async function openTabByText(page, text) {
     panel_id: panelId,
     port_id: portId,
     socket_actions: socketActions,
+    front_only_shadow_port_id: shadowPortIdAfterFrontOnly,
+    front_only_native_link: nativeLinkAfterFrontOnly,
+    front_only_switch_form_visible:
+      nativeLinkAfterFrontOnly === shadowPortIdAfterFrontOnly
+      && switchPortFormAfterFrontOnly.includes(panelName),
     native_link_after_save: nativeLinkAfterSave,
     terminal_port_id: terminalPortId,
     after_rear_disconnect: afterRearDisconnect,
@@ -358,6 +397,9 @@ async function openTabByText(page, text) {
     || !result.socket_actions.connection_details
     || result.socket_actions.manage !== 1
     || result.socket_actions.disconnect !== 1
+    || !result.front_only_shadow_port_id
+    || result.front_only_native_link !== result.front_only_shadow_port_id
+    || !result.front_only_switch_form_visible
     || result.after_rear_disconnect.rear !== '0'
     || result.after_rear_disconnect.front !== String(TEST_FRONT_PORT_ID)
     || result.native_link_after_save !== result.terminal_port_id

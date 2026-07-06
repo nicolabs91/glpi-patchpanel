@@ -112,6 +112,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         $oldLink = [
             'rear_port' => self::getSocketNetworkPortId((int) ($existingRear['items_id'] ?? 0)),
             'front_port' => (int) ($existingFront['items_id'] ?? 0),
+            'panel_port' => $portId,
         ];
 
         $desired = [
@@ -178,6 +179,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         self::clearNativeNetworkPortLink([
             'rear_port' => self::getSocketNetworkPortId((int) ($endpoints[self::REAR]['items_id'] ?? 0)),
             'front_port' => (int) ($endpoints[self::FRONT]['items_id'] ?? 0),
+            'panel_port' => $portId,
         ]);
         if (
             $side === self::REAR
@@ -300,6 +302,38 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         }
     }
 
+    public static function cleanupPanelNetworkPortsForPanelPorts(array $panelPortIds): void
+    {
+        global $DB;
+
+        $panelPortIds = array_values(array_filter(array_map('intval', $panelPortIds)));
+        if (!$panelPortIds) {
+            return;
+        }
+
+        $networkPortIds = [];
+        foreach ($DB->request([
+            'SELECT' => ['id'],
+            'FROM' => NetworkPort::getTable(),
+            'WHERE' => [
+                'itemtype' => PluginPatchpanelPanelPort::class,
+                'items_id' => $panelPortIds,
+            ],
+        ]) as $row) {
+            $networkPortIds[] = (int) $row['id'];
+        }
+
+        if (!$networkPortIds) {
+            return;
+        }
+
+        $wired = new NetworkPort_NetworkPort();
+        foreach ($networkPortIds as $networkPortId) {
+            $wired->disconnectFrom($networkPortId);
+        }
+        $DB->delete(NetworkPort::getTable(), ['id' => $networkPortIds]);
+    }
+
     private static function clearSocketDeviceFields(\Glpi\Socket $socket): bool
     {
         global $DB;
@@ -352,6 +386,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             self::clearNativeNetworkPortLink([
                 'rear_port' => $socketPortId,
                 'front_port' => (int) ($frontEndpoint['items_id'] ?? 0),
+                'panel_port' => (int) ($rearEndpoint['plugin_patchpanel_panelports_id'] ?? 0),
             ]);
         }
     }
@@ -374,11 +409,16 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         $newLink = [
             'rear_port' => self::getSocketNetworkPortId((int) ($endpoints[self::REAR]['items_id'] ?? 0)),
             'front_port' => (int) ($endpoints[self::FRONT]['items_id'] ?? 0),
+            'panel_port' => (int) (
+                ($endpoints[self::FRONT]['plugin_patchpanel_panelports_id'] ?? 0)
+                ?: ($endpoints[self::REAR]['plugin_patchpanel_panelports_id'] ?? 0)
+            ),
         ];
 
         if (
             (int) ($oldLink['rear_port'] ?? 0) !== (int) $newLink['rear_port']
             || (int) ($oldLink['front_port'] ?? 0) !== (int) $newLink['front_port']
+            || (int) ($oldLink['panel_port'] ?? 0) !== (int) $newLink['panel_port']
         ) {
             self::clearNativeNetworkPortLink($oldLink);
         }
@@ -391,13 +431,15 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
     {
         $rearPortId = (int) ($link['rear_port'] ?? 0);
         $frontPortId = (int) ($link['front_port'] ?? 0);
+        $panelNetworkPortId = self::getPanelNetworkPortId((int) ($link['panel_port'] ?? 0));
+        $targetPortId = $rearPortId > 0 ? $rearPortId : $panelNetworkPortId;
         $wired = new NetworkPort_NetworkPort();
 
-        if ($frontPortId > 0 && $rearPortId <= 0) {
+        if ($frontPortId > 0 && $targetPortId <= 0) {
             $wired->disconnectFrom($frontPortId);
         }
-        if ($rearPortId > 0 && $frontPortId <= 0) {
-            $wired->disconnectFrom($rearPortId);
+        if ($targetPortId > 0 && $frontPortId <= 0) {
+            $wired->disconnectFrom($targetPortId);
         }
     }
 
@@ -405,13 +447,16 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
     {
         $rearPortId = (int) ($link['rear_port'] ?? 0);
         $frontPortId = (int) ($link['front_port'] ?? 0);
-        if ($rearPortId <= 0 || $frontPortId <= 0) {
+        $targetPortId = $rearPortId > 0
+            ? $rearPortId
+            : self::getPanelNetworkPortId((int) ($link['panel_port'] ?? 0));
+        if ($targetPortId <= 0 || $frontPortId <= 0) {
             return;
         }
 
         $wired = new NetworkPort_NetworkPort();
         $opposite = (int) $wired->getOppositeContact($frontPortId);
-        if ($opposite === $rearPortId) {
+        if ($opposite === $targetPortId) {
             $wired->disconnectFrom($frontPortId);
         }
     }
@@ -420,23 +465,79 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
     {
         $rearPortId = (int) ($link['rear_port'] ?? 0);
         $frontPortId = (int) ($link['front_port'] ?? 0);
-        if ($rearPortId <= 0 || $frontPortId <= 0) {
+        $targetPortId = $rearPortId > 0
+            ? $rearPortId
+            : self::ensurePanelNetworkPort((int) ($link['panel_port'] ?? 0));
+        if ($targetPortId <= 0 || $frontPortId <= 0) {
             return;
         }
 
         $wired = new NetworkPort_NetworkPort();
-        if ((int) $wired->getOppositeContact($frontPortId) === $rearPortId) {
+        if ((int) $wired->getOppositeContact($frontPortId) === $targetPortId) {
             return;
         }
 
         $wired->disconnectFrom($frontPortId);
-        $wired->disconnectFrom($rearPortId);
+        $wired->disconnectFrom($targetPortId);
         if (!$wired->add([
             'networkports_id_1' => $frontPortId,
-            'networkports_id_2' => $rearPortId,
+            'networkports_id_2' => $targetPortId,
         ])) {
             throw new RuntimeException('Native network port link update failed');
         }
+    }
+
+    private static function getPanelNetworkPortId(int $panelPortId): int
+    {
+        if ($panelPortId <= 0) {
+            return 0;
+        }
+
+        $ports = (new NetworkPort())->find([
+            'itemtype' => PluginPatchpanelPanelPort::class,
+            'items_id' => $panelPortId,
+            'is_deleted' => 0,
+        ], [], 1);
+        $port = reset($ports);
+        return (int) ($port['id'] ?? 0);
+    }
+
+    private static function ensurePanelNetworkPort(int $panelPortId): int
+    {
+        if ($panelPortId <= 0) {
+            return 0;
+        }
+
+        $existingId = self::getPanelNetworkPortId($panelPortId);
+        if ($existingId > 0) {
+            return $existingId;
+        }
+
+        $panelPort = new PluginPatchpanelPanelPort();
+        if (!$panelPort->getFromDB($panelPortId)) {
+            return 0;
+        }
+
+        $panelName = PluginPatchpanelPanel::getTypeName(1);
+        $panel = new PluginPatchpanelPanel();
+        if ($panel->getFromDB((int) ($panelPort->fields['plugin_patchpanel_panels_id'] ?? 0))) {
+            $panelName = $panel->getName();
+        }
+
+        $networkPort = new NetworkPort();
+        return (int) $networkPort->add([
+            'itemtype' => PluginPatchpanelPanelPort::class,
+            'items_id' => $panelPortId,
+            'entities_id' => (int) ($panel->fields['entities_id'] ?? 0),
+            'is_recursive' => (int) ($panel->fields['is_recursive'] ?? 0),
+            'name' => sprintf(
+                '%s - %s %d',
+                $panelName,
+                __('Port', 'patchpanel'),
+                (int) ($panelPort->fields['number'] ?? $panelPortId)
+            ),
+            'instantiation_type' => 'NetworkPortEthernet',
+        ]);
     }
 
     private static function saveSide(int $portId, string $side, array $endpoint): void

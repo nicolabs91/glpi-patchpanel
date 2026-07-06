@@ -136,6 +136,9 @@ class PluginPatchpanelPanelPort extends CommonDBChild
     {
         global $DB;
 
+        PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts([
+            (int) $this->getID(),
+        ]);
         $DB->delete(PluginPatchpanelPortEndpoint::getTable(), [
             'plugin_patchpanel_panelports_id' => $this->getID(),
         ]);

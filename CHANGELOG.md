@@ -7,6 +7,10 @@
   warnings, and proves route views keep rendering instead of crashing.
 - Added a route-consistency e2e checkpoint that compares the same route across
   the panel-port form, route explorer, endpoint tab and impact filter.
+- Added a front-only switch-port sync path: when a panel port is patched to a
+  switch/router port before a rear socket has a GLPI network port, PatchPanel
+  now creates a GLPI network port for the panel port and links it natively so
+  the switch port form also shows the PatchPanel connection.
 - Fixed route building so PatchPanel's native front-to-socket endpoint link is
   not counted as an upstream/core network edge and cannot loop the physical
   route back to the endpoint device.
