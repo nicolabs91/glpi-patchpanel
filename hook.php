@@ -68,6 +68,11 @@ function plugin_patchpanel_sync_socket_native_network_link(CommonDBTM $item): vo
     PluginPatchpanelPortEndpoint::synchronizeNativeNetworkPortLinksForSocket($item);
 }
 
+function plugin_patchpanel_sync_front_endpoint_after_native_connect(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::syncFrontEndpointAfterNativeNetworkPortConnect($item);
+}
+
 function plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupFrontEndpointAfterNativeNetworkPortDisconnect($item);

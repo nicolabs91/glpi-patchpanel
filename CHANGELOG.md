@@ -17,6 +17,9 @@
 - Synced external GLPI native network-port disconnects back into PatchPanel:
   disconnecting the switch/router port now removes the matching PatchPanel
   front endpoint for both front-only and rear+front patch links.
+- Synced external GLPI native network-port connects into PatchPanel as well:
+  connecting a switch/router port to a known panel shadow port or rear socket
+  network port now fills the matching PatchPanel front endpoint automatically.
 - Expanded the native-link health check so front-only shadow network-port drift
   is detected as well as rear-socket native-link drift.
 - Fixed route building so PatchPanel's native front-to-socket endpoint link is

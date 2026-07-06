@@ -35,6 +35,35 @@ function queryDb(sql) {
   ], { encoding: 'utf8' }).trim();
 }
 
+function addNativeNetworkPortLink(firstPortId, secondPortId) {
+  const code = `
+chdir('/var/www/glpi');
+require_once 'src/Glpi/Application/ResourcesChecker.php';
+(new Glpi\\Application\\ResourcesChecker(getcwd()))->checkResources();
+require_once 'vendor/autoload.php';
+$kernel = new Glpi\\Kernel\\Kernel();
+$kernel->boot();
+$auth = new Auth();
+$auth->login('${username}', '${password}', true);
+$wired = new NetworkPort_NetworkPort();
+$id = $wired->add([
+    'networkports_id_1' => ${Number(firstPortId)},
+    'networkports_id_2' => ${Number(secondPortId)},
+]);
+if (!$id) {
+    exit(2);
+}
+echo $id;
+`;
+  return execFileSync('docker', [
+    'exec',
+    'glpi-app',
+    'php',
+    '-r',
+    code,
+  ], { encoding: 'utf8' }).trim();
+}
+
 function resetAp001Route() {
   queryDb(
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
@@ -240,7 +269,26 @@ async function openTabByText(page, text) {
     native_link_count: queryDb(
       `SELECT COUNT(*)
        FROM glpi_networkports_networkports
-       WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+      WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+    ),
+  };
+  const frontOnlyNativeConnectRelationId = addNativeNetworkPortLink(
+    TEST_FRONT_PORT_ID,
+    shadowPortIdAfterFrontOnly
+  );
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
+    waitUntil: 'networkidle',
+  });
+  const afterFrontOnlyNativeConnect = {
+    relation_id: frontOnlyNativeConnectRelationId,
+    front: await page.locator('select[name="front_items_id"]').inputValue(),
+    front_endpoint_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_plugin_patchpanel_portendpoints
+       WHERE plugin_patchpanel_panelports_id = ${portId}
+         AND side = 'front'
+         AND itemtype = 'NetworkPort'
+         AND items_id = ${TEST_FRONT_PORT_ID}`
     ),
   };
 
@@ -309,7 +357,27 @@ async function openTabByText(page, text) {
     native_link_count: queryDb(
       `SELECT COUNT(*)
        FROM glpi_networkports_networkports
-       WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+      WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+    ),
+  };
+  const fullNativeConnectRelationId = addNativeNetworkPortLink(
+    TEST_FRONT_PORT_ID,
+    terminalPortId
+  );
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
+    waitUntil: 'networkidle',
+  });
+  const afterFullNativeConnect = {
+    relation_id: fullNativeConnectRelationId,
+    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    front: await page.locator('select[name="front_items_id"]').inputValue(),
+    front_endpoint_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_plugin_patchpanel_portendpoints
+       WHERE plugin_patchpanel_panelports_id = ${portId}
+         AND side = 'front'
+         AND itemtype = 'NetworkPort'
+         AND items_id = ${TEST_FRONT_PORT_ID}`
     ),
   };
   await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
@@ -463,9 +531,11 @@ async function openTabByText(page, text) {
       nativeLinkAfterFrontOnly === shadowPortIdAfterFrontOnly
       && switchPortFormAfterFrontOnly.includes(panelName),
     after_front_only_native_disconnect: afterFrontOnlyNativeDisconnect,
+    after_front_only_native_connect: afterFrontOnlyNativeConnect,
     native_link_after_save: nativeLinkAfterSave,
     terminal_port_id: terminalPortId,
     after_full_native_disconnect: afterFullNativeDisconnect,
+    after_full_native_connect: afterFullNativeConnect,
     native_link_after_native_reconnect: nativeLinkAfterNativeReconnect,
     after_rear_disconnect: afterRearDisconnect,
     native_link_after_rear_disconnect: nativeLinkAfterRearDisconnect,
@@ -493,6 +563,9 @@ async function openTabByText(page, text) {
     || result.after_front_only_native_disconnect.front !== '0'
     || result.after_front_only_native_disconnect.front_endpoint_count !== '0'
     || result.after_front_only_native_disconnect.native_link_count !== '0'
+    || !result.after_front_only_native_connect.relation_id
+    || result.after_front_only_native_connect.front !== String(TEST_FRONT_PORT_ID)
+    || result.after_front_only_native_connect.front_endpoint_count !== '1'
     || result.after_rear_disconnect.rear !== '0'
     || result.after_rear_disconnect.front !== String(TEST_FRONT_PORT_ID)
     || result.native_link_after_save !== result.terminal_port_id
@@ -501,6 +574,10 @@ async function openTabByText(page, text) {
     || result.after_full_native_disconnect.front !== '0'
     || result.after_full_native_disconnect.front_endpoint_count !== '0'
     || result.after_full_native_disconnect.native_link_count !== '0'
+    || !result.after_full_native_connect.relation_id
+    || result.after_full_native_connect.rear !== String(TEST_SOCKET_ID)
+    || result.after_full_native_connect.front !== String(TEST_FRONT_PORT_ID)
+    || result.after_full_native_connect.front_endpoint_count !== '1'
     || result.native_link_after_native_reconnect !== result.terminal_port_id
     || result.native_link_after_rear_disconnect !== '0'
     || !result.device_actions.side
