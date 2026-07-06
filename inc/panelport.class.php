@@ -12,6 +12,19 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         return _n('Panel port', 'Panel ports', $nb, 'patchpanel');
     }
 
+    public function getName($options = [])
+    {
+        $portNumber = (int) ($this->fields['number'] ?? $this->getID());
+        $portName = sprintf(__('Port %d', 'patchpanel'), $portNumber);
+
+        $panel = new PluginPatchpanelPanel();
+        if ($panel->getFromDB((int) ($this->fields['plugin_patchpanel_panels_id'] ?? 0))) {
+            return sprintf('%s / %s', $panel->getName(), $portName);
+        }
+
+        return $portName;
+    }
+
     public static function getMediaOptions(): array
     {
         return [

@@ -160,6 +160,11 @@ async function selectValue(page, name, value, label) {
   if (!portId) {
     throw new Error(`Port tile did not lead to a valid port: ${portUrl}`);
   }
+  const portFormBody = await page.locator('body').innerText();
+  const portDisplayName = {
+    has_panel_port_name: portFormBody.includes(`${panelName} / Port 1`),
+    has_not_available_title: portFormBody.includes('Panel port - N/A'),
+  };
   if (await page.locator('[name="front_cables_id"]').count()) {
     throw new Error('The redundant GLPI cable field is visible in the standard port form');
   }
@@ -241,6 +246,7 @@ async function selectValue(page, name, value, label) {
     visual_columns: Number(visualColumns),
     overview_cards: overviewCards,
     quick_actions: quickActions,
+    port_display_name: portDisplayName,
     port_workflow: portWorkflow,
     route: {
       terminal: routeBody.includes('NLH-R0201-TV01'),
@@ -310,6 +316,8 @@ async function selectValue(page, name, value, label) {
     || result.quick_actions.health !== 0
     || result.quick_actions.audit < 1
     || result.quick_actions.labels !== 0
+    || !result.port_display_name.has_panel_port_name
+    || result.port_display_name.has_not_available_title
     || !result.legacy_notice_hidden
     || !result.port_workflow.visible
     || !result.port_workflow.status.includes('Free')
