@@ -164,30 +164,39 @@ final class PluginPatchpanelHealth
             self::countCheck(
                 __('Missing native network port links', 'patchpanel'),
                 "SELECT COUNT(*) AS count
-                 FROM glpi_plugin_patchpanel_panelports p
-                 INNER JOIN glpi_plugin_patchpanel_portendpoints rear
-                   ON rear.plugin_patchpanel_panelports_id = p.id
-                  AND rear.side = 'rear'
-                  AND rear.itemtype = 'Glpi\\\\Socket'
-                 INNER JOIN glpi_sockets s
-                   ON s.id = rear.items_id
-                  AND s.networkports_id > 0
-                 INNER JOIN glpi_plugin_patchpanel_portendpoints front
-                   ON front.plugin_patchpanel_panelports_id = p.id
-                  AND front.side = 'front'
-                  AND front.itemtype = 'NetworkPort'
-                 INNER JOIN glpi_networkports np
-                   ON np.id = front.items_id
-                  AND np.is_deleted = 0
+                 FROM (
+                   SELECT
+                     front.items_id AS front_port_id,
+                     COALESCE(NULLIF(s.networkports_id, 0), shadow.id, 0) AS target_port_id
+                   FROM glpi_plugin_patchpanel_panelports p
+                   INNER JOIN glpi_plugin_patchpanel_portendpoints front
+                     ON front.plugin_patchpanel_panelports_id = p.id
+                    AND front.side = 'front'
+                    AND front.itemtype = 'NetworkPort'
+                   INNER JOIN glpi_networkports np
+                     ON np.id = front.items_id
+                    AND np.is_deleted = 0
+                   LEFT JOIN glpi_plugin_patchpanel_portendpoints rear
+                     ON rear.plugin_patchpanel_panelports_id = p.id
+                    AND rear.side = 'rear'
+                    AND rear.itemtype = 'Glpi\\\\Socket'
+                   LEFT JOIN glpi_sockets s
+                     ON s.id = rear.items_id
+                   LEFT JOIN glpi_networkports shadow
+                     ON shadow.itemtype = 'PluginPatchpanelPanelPort'
+                    AND shadow.items_id = p.id
+                    AND shadow.is_deleted = 0
+                 ) expected
                  LEFT JOIN glpi_networkports_networkports nn
                    ON (
-                     nn.networkports_id_1 = front.items_id
-                     AND nn.networkports_id_2 = s.networkports_id
+                     nn.networkports_id_1 = expected.front_port_id
+                     AND nn.networkports_id_2 = expected.target_port_id
                    ) OR (
-                     nn.networkports_id_2 = front.items_id
-                     AND nn.networkports_id_1 = s.networkports_id
+                     nn.networkports_id_2 = expected.front_port_id
+                     AND nn.networkports_id_1 = expected.target_port_id
                    )
-                 WHERE nn.id IS NULL",
+                 WHERE expected.target_port_id > 0
+                   AND nn.id IS NULL",
                 __('Save the affected panel port or socket again so GLPI Connected to matches PatchPanel.', 'patchpanel')
             ),
             self::countCheck(

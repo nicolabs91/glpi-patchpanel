@@ -14,6 +14,11 @@
 - Gave panel ports a GLPI object display name based on the patch-panel name and
   port number, for example `PP-L1-IDF-A / Port 1`, so the form header no longer
   shows `N/A`.
+- Synced external GLPI native network-port disconnects back into PatchPanel:
+  disconnecting the switch/router port now removes the matching PatchPanel
+  front endpoint for both front-only and rear+front patch links.
+- Expanded the native-link health check so front-only shadow network-port drift
+  is detected as well as rear-socket native-link drift.
 - Fixed route building so PatchPanel's native front-to-socket endpoint link is
   not counted as an upstream/core network edge and cannot loop the physical
   route back to the endpoint device.

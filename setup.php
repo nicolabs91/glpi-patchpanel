@@ -44,6 +44,8 @@ function plugin_init_patchpanel(): void
         = 'plugin_patchpanel_sync_socket_native_network_link';
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_ADD]['patchpanel'][\Glpi\Socket::class]
         = 'plugin_patchpanel_sync_socket_native_network_link';
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][NetworkPort_NetworkPort::class]
+        = 'plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect';
     $PLUGIN_HOOKS['add_css']['patchpanel'] = 'public/css/patchpanel.css';
     $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/socket-cleanup.js';
 }

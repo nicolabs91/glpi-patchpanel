@@ -207,9 +207,42 @@ async function openTabByText(page, text) {
     waitUntil: 'networkidle',
   });
   const switchPortFormAfterFrontOnly = await page.locator('body').innerText();
+  const frontOnlyRelationId = queryDb(
+    `SELECT id
+     FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}
+     LIMIT 1`
+  );
+  const frontOnlyDisconnectToken = await page.locator('input[name="_glpi_csrf_token"]').last().inputValue();
+  const frontOnlyNativeDisconnectResponse = await page.request.post(
+    `${baseUrl}/front/networkport.form.php`,
+    {
+      form: {
+        id: frontOnlyRelationId,
+        disconnect: '1',
+        _glpi_csrf_token: frontOnlyDisconnectToken,
+      },
+      maxRedirects: 0,
+    },
+  );
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
     waitUntil: 'networkidle',
   });
+  const afterFrontOnlyNativeDisconnect = {
+    status: frontOnlyNativeDisconnectResponse.status(),
+    front: await page.locator('select[name="front_items_id"]').inputValue(),
+    front_endpoint_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_plugin_patchpanel_portendpoints
+       WHERE plugin_patchpanel_panelports_id = ${portId}
+         AND side = 'front'`
+    ),
+    native_link_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_networkports_networkports
+       WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+    ),
+  };
 
   queryDb(
     `UPDATE glpi_sockets
@@ -230,6 +263,59 @@ async function openTabByText(page, text) {
   await page.waitForLoadState('networkidle');
   const terminalPortId = queryDb(`SELECT networkports_id FROM glpi_sockets WHERE id = ${TEST_SOCKET_ID}`);
   const nativeLinkAfterSave = queryDb(
+    `SELECT CASE
+       WHEN networkports_id_1 = ${TEST_FRONT_PORT_ID} THEN networkports_id_2
+       WHEN networkports_id_2 = ${TEST_FRONT_PORT_ID} THEN networkports_id_1
+       ELSE 0
+     END
+     FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}
+     LIMIT 1`
+  );
+  const fullRelationId = queryDb(
+    `SELECT id
+     FROM glpi_networkports_networkports
+     WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}
+     LIMIT 1`
+  );
+  await page.goto(`${baseUrl}/front/networkport.form.php?id=${TEST_FRONT_PORT_ID}`, {
+    waitUntil: 'networkidle',
+  });
+  const fullDisconnectToken = await page.locator('input[name="_glpi_csrf_token"]').last().inputValue();
+  const fullNativeDisconnectResponse = await page.request.post(
+    `${baseUrl}/front/networkport.form.php`,
+    {
+      form: {
+        id: fullRelationId,
+        disconnect: '1',
+        _glpi_csrf_token: fullDisconnectToken,
+      },
+      maxRedirects: 0,
+    },
+  );
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
+    waitUntil: 'networkidle',
+  });
+  const afterFullNativeDisconnect = {
+    status: fullNativeDisconnectResponse.status(),
+    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    front: await page.locator('select[name="front_items_id"]').inputValue(),
+    front_endpoint_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_plugin_patchpanel_portendpoints
+       WHERE plugin_patchpanel_panelports_id = ${portId}
+         AND side = 'front'`
+    ),
+    native_link_count: queryDb(
+      `SELECT COUNT(*)
+       FROM glpi_networkports_networkports
+       WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID} OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
+    ),
+  };
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
+  await page.locator('button[name="update"], input[name="update"]').click();
+  await page.waitForLoadState('networkidle');
+  const nativeLinkAfterNativeReconnect = queryDb(
     `SELECT CASE
        WHEN networkports_id_1 = ${TEST_FRONT_PORT_ID} THEN networkports_id_2
        WHEN networkports_id_2 = ${TEST_FRONT_PORT_ID} THEN networkports_id_1
@@ -376,8 +462,11 @@ async function openTabByText(page, text) {
     front_only_switch_form_visible:
       nativeLinkAfterFrontOnly === shadowPortIdAfterFrontOnly
       && switchPortFormAfterFrontOnly.includes(panelName),
+    after_front_only_native_disconnect: afterFrontOnlyNativeDisconnect,
     native_link_after_save: nativeLinkAfterSave,
     terminal_port_id: terminalPortId,
+    after_full_native_disconnect: afterFullNativeDisconnect,
+    native_link_after_native_reconnect: nativeLinkAfterNativeReconnect,
     after_rear_disconnect: afterRearDisconnect,
     native_link_after_rear_disconnect: nativeLinkAfterRearDisconnect,
     device_actions: deviceActions,
@@ -400,9 +489,19 @@ async function openTabByText(page, text) {
     || !result.front_only_shadow_port_id
     || result.front_only_native_link !== result.front_only_shadow_port_id
     || !result.front_only_switch_form_visible
+    || ![200, 302, 303].includes(result.after_front_only_native_disconnect.status)
+    || result.after_front_only_native_disconnect.front !== '0'
+    || result.after_front_only_native_disconnect.front_endpoint_count !== '0'
+    || result.after_front_only_native_disconnect.native_link_count !== '0'
     || result.after_rear_disconnect.rear !== '0'
     || result.after_rear_disconnect.front !== String(TEST_FRONT_PORT_ID)
     || result.native_link_after_save !== result.terminal_port_id
+    || ![200, 302, 303].includes(result.after_full_native_disconnect.status)
+    || result.after_full_native_disconnect.rear !== String(TEST_SOCKET_ID)
+    || result.after_full_native_disconnect.front !== '0'
+    || result.after_full_native_disconnect.front_endpoint_count !== '0'
+    || result.after_full_native_disconnect.native_link_count !== '0'
+    || result.native_link_after_native_reconnect !== result.terminal_port_id
     || result.native_link_after_rear_disconnect !== '0'
     || !result.device_actions.side
     || !result.device_actions.connection_details
