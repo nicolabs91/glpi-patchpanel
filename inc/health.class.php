@@ -113,6 +113,17 @@ final class PluginPatchpanelHealth
                 __('Remove orphan panel ports or restore the parent panel.', 'patchpanel')
             ),
             self::countCheck(
+                __('Hidden GLPI ports without a panel port', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_networkports np
+                 LEFT JOIN glpi_plugin_patchpanel_panelports p
+                   ON p.id = np.items_id
+                 WHERE np.itemtype = 'PluginPatchpanelPanelPort'
+                   AND np.is_deleted = 0
+                   AND p.id IS NULL",
+                __('Purge orphan hidden GLPI ports after backing up the affected rows.', 'patchpanel')
+            ),
+            self::countCheck(
                 __('Duplicate port sides', 'patchpanel'),
                 "SELECT COUNT(*) AS count
                  FROM (
@@ -167,7 +178,7 @@ final class PluginPatchpanelHealth
                  FROM (
                    SELECT
                      front.items_id AS front_port_id,
-                     COALESCE(NULLIF(s.networkports_id, 0), shadow.id, 0) AS target_port_id
+                     COALESCE(shadow.id, 0) AS target_port_id
                    FROM glpi_plugin_patchpanel_panelports p
                    INNER JOIN glpi_plugin_patchpanel_portendpoints front
                      ON front.plugin_patchpanel_panelports_id = p.id

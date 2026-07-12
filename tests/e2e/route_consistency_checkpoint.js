@@ -39,7 +39,12 @@ function resetAp001Route() {
   );
   queryDb(
     `INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2)
-     VALUES (${TEST_FRONT_PORT_ID}, ${TEST_SOCKET_PORT_ID})`
+     SELECT ${TEST_FRONT_PORT_ID}, id
+     FROM glpi_networkports
+     WHERE itemtype = 'PluginPatchpanelPanelPort'
+       AND items_id = ${TEST_PANEL_PORT_ID}
+       AND is_deleted = 0
+     LIMIT 1`
   );
   queryDb(
     `DELETE FROM glpi_plugin_patchpanel_portendpoints
@@ -128,13 +133,28 @@ function comparableSteps(steps) {
     await page.goto(`${baseUrl}/front/networkport.form.php?id=${TEST_SOCKET_PORT_ID}`, {
       waitUntil: 'networkidle',
     });
-    await page.locator('a, button').filter({ hasText: /Patch panel routes/i }).first().click();
+    const endpointTab = page.locator('a, button').filter({ hasText: /Patch panel routes/i }).first();
+    const endpointTabUsesPanelIcon = await endpointTab.locator('i.ti-layout-grid').count() === 1;
+    await endpointTab.click();
     await page.waitForTimeout(1000);
     const endpointCard = page
       .locator('.patchpanel-endpoint-route')
       .filter({ hasText: `${TEST_PANEL_NAME} / #1` })
       .first();
     const endpointSteps = await readRouteSteps(endpointCard);
+
+    await page.goto(
+      `${baseUrl}/front/networkequipment.form.php?id=${TEST_ACCESS_SWITCH_ID}&forcetab=NetworkPort$1`,
+      { waitUntil: 'networkidle' },
+    );
+    const visiblePanelPortLink = page.locator(
+      `a[href*="/plugins/patchpanel/front/panelport.form.php?id=${TEST_PANEL_PORT_ID}"]`,
+    ).first();
+    await visiblePanelPortLink.waitFor({ state: 'visible' });
+    const nativeConnectionCell = visiblePanelPortLink.locator('xpath=ancestor::td[1]');
+    const visibleShadowPortLinks = await nativeConnectionCell
+      .locator('a[href*="/front/networkport.form.php"]')
+      .count();
 
     const impactHref = `/plugins/patchpanel/front/routes.php?impact_type=NetworkEquipment&impact_id=${TEST_ACCESS_SWITCH_ID}`;
     await page.goto(new URL(impactHref, baseUrl).toString(), { waitUntil: 'networkidle' });
@@ -170,7 +190,7 @@ function comparableSteps(steps) {
       'NLH-R0101-WA-TV01 - Room 0101 TV wall outlet',
       TEST_PANEL_NAME,
       'Patch port 01',
-      'NLH-F01-IDF-A-SW01 - Access switch A · Gi1/0/01 - Room 0101 outlet',
+      'NLH-F01-IDF-A-SW01 01',
     ];
 
     const result = {
@@ -181,12 +201,20 @@ function comparableSteps(steps) {
         impact: impactComparable.length,
       },
       all_surfaces_match: allMatch,
+      endpoint_tab_uses_panel_icon: endpointTabUsesPanelIcon,
+      native_connection_has_one_panel_port: await visiblePanelPortLink.count() === 1,
+      native_connection_hides_shadow_port: visibleShadowPortLinks === 0,
       expected_order:
         expectedOrder.every((label, index) => portComparable[index]?.text === label),
       endpoint_not_repeated_as_upstream:
         !portComparable.slice(5).some(step =>
           step.href === '/front/networkequipment.form.php?id=1'
           || step.text.includes('NLH-R0101-TV01')
+        ),
+      downlinks_not_misclassified_as_upstream:
+        !portComparable.slice(5).some(step =>
+          step.text.includes('Guest room television')
+          || step.href === '/front/networkequipment.form.php?id=3'
         ),
       impact_href: impactHref,
       port_steps: portComparable,
@@ -199,8 +227,12 @@ function comparableSteps(steps) {
 
     if (
       !result.all_surfaces_match
+      || !result.endpoint_tab_uses_panel_icon
+      || !result.native_connection_has_one_panel_port
+      || !result.native_connection_hides_shadow_port
       || !result.expected_order
       || !result.endpoint_not_repeated_as_upstream
+      || !result.downlinks_not_misclassified_as_upstream
       || result.counts.port < 5
       || result.browser_errors.length
     ) {

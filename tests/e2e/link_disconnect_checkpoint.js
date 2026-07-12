@@ -72,7 +72,7 @@ function resetAp001Route() {
     "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
   );
   queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217)"
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
   );
   queryDb(
     "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
@@ -90,7 +90,10 @@ function restoreDemoNativeLinks() {
     "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224, 219, 228) OR networkports_id_2 IN (217, 224, 219, 228)"
   );
   queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217), (228, 219)"
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
+  );
+  queryDb(
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (228, 219)"
   );
 }
 
@@ -211,7 +214,7 @@ async function openTabByText(page, text) {
      WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID}
         OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
   );
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const shadowPortIdAfterFrontOnly = queryDb(
@@ -306,10 +309,17 @@ async function openTabByText(page, text) {
   );
 
   await selectValue(page, 'rear_items_id', TEST_SOCKET_ID, '123');
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const terminalPortId = queryDb(`SELECT networkports_id FROM glpi_sockets WHERE id = ${TEST_SOCKET_ID}`);
+  const fullShadowPortId = queryDb(
+    `SELECT id FROM glpi_networkports
+     WHERE itemtype = 'PluginPatchpanelPanelPort'
+       AND items_id = ${portId}
+       AND is_deleted = 0
+     LIMIT 1`
+  );
   const nativeLinkAfterSave = queryDb(
     `SELECT CASE
        WHEN networkports_id_1 = ${TEST_FRONT_PORT_ID} THEN networkports_id_2
@@ -362,7 +372,7 @@ async function openTabByText(page, text) {
   };
   const fullNativeConnectRelationId = addNativeNetworkPortLink(
     TEST_FRONT_PORT_ID,
-    terminalPortId
+    fullShadowPortId
   );
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${portId}`, {
     waitUntil: 'networkidle',
@@ -380,7 +390,7 @@ async function openTabByText(page, text) {
          AND items_id = ${TEST_FRONT_PORT_ID}`
     ),
   };
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 - Port 16');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const nativeLinkAfterNativeReconnect = queryDb(
@@ -534,6 +544,7 @@ async function openTabByText(page, text) {
     after_front_only_native_connect: afterFrontOnlyNativeConnect,
     native_link_after_save: nativeLinkAfterSave,
     terminal_port_id: terminalPortId,
+    full_shadow_port_id: fullShadowPortId,
     after_full_native_disconnect: afterFullNativeDisconnect,
     after_full_native_connect: afterFullNativeConnect,
     native_link_after_native_reconnect: nativeLinkAfterNativeReconnect,
@@ -568,7 +579,8 @@ async function openTabByText(page, text) {
     || result.after_front_only_native_connect.front_endpoint_count !== '1'
     || result.after_rear_disconnect.rear !== '0'
     || result.after_rear_disconnect.front !== String(TEST_FRONT_PORT_ID)
-    || result.native_link_after_save !== result.terminal_port_id
+    || result.native_link_after_save !== result.full_shadow_port_id
+    || result.native_link_after_save === result.terminal_port_id
     || ![200, 302, 303].includes(result.after_full_native_disconnect.status)
     || result.after_full_native_disconnect.rear !== String(TEST_SOCKET_ID)
     || result.after_full_native_disconnect.front !== '0'
@@ -578,8 +590,8 @@ async function openTabByText(page, text) {
     || result.after_full_native_connect.rear !== String(TEST_SOCKET_ID)
     || result.after_full_native_connect.front !== String(TEST_FRONT_PORT_ID)
     || result.after_full_native_connect.front_endpoint_count !== '1'
-    || result.native_link_after_native_reconnect !== result.terminal_port_id
-    || result.native_link_after_rear_disconnect !== '0'
+    || result.native_link_after_native_reconnect !== result.full_shadow_port_id
+    || result.native_link_after_rear_disconnect !== '1'
     || !result.device_actions.side
     || !result.device_actions.connection_details
     || result.device_actions.manage !== 1

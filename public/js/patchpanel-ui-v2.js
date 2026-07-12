@@ -1,4 +1,32 @@
 (function () {
+  function hideManagedShadowPortLinks(root = document) {
+    const panelPortLinks = [];
+    if (root instanceof Element && root.matches('a[href*="/plugins/patchpanel/front/panelport.form.php"]')) {
+      panelPortLinks.push(root);
+    }
+    panelPortLinks.push(
+      ...root.querySelectorAll('a[href*="/plugins/patchpanel/front/panelport.form.php"]')
+    );
+
+    panelPortLinks.forEach((panelPortLink) => {
+      const container = panelPortLink.closest('td, dd, li') || panelPortLink.parentElement;
+
+      const shadowPortLink = Array.from(container?.querySelectorAll('a[href*="/front/networkport.form.php"]') || [])
+        .find((link) => panelPortLink.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if (!shadowPortLink) {
+        return;
+      }
+
+      // GLPI renders an owned network port as "owner > network port". The
+      // owner is PatchPanel's real port; the managed shadow port after it is
+      // only an implementation detail and must not look like a second port.
+      const range = document.createRange();
+      range.setStartAfter(panelPortLink);
+      range.setEndAfter(shadowPortLink);
+      range.deleteContents();
+    });
+  }
+
   function getSocketId() {
     if (!location.pathname.endsWith('/front/socket.form.php')) {
       return 0;
@@ -40,6 +68,22 @@
   }
 
   async function boot() {
+    hideManagedShadowPortLinks();
+    let rescanScheduled = false;
+    new MutationObserver(() => {
+      if (rescanScheduled) {
+        return;
+      }
+      rescanScheduled = true;
+      window.requestAnimationFrame(() => {
+        rescanScheduled = false;
+        // GLPI builds AJAX tab content in multiple mutations. Rescan the
+        // completed document so the owner and its managed network port are
+        // handled even when they arrived in separate DOM updates.
+        hideManagedShadowPortLinks(document);
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+
     const socketId = getSocketId();
     if (socketId <= 0 || !window.CFG_GLPI?.root_doc) {
       return;

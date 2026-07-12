@@ -27,7 +27,7 @@ function resetAp001Route() {
     "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
   );
   queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (224, 217)"
+    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
   );
   queryDb(
     "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
@@ -98,6 +98,19 @@ function resetAp001Route() {
       }))
     );
 
+    const nativeFrontPortId = queryDb(
+      "SELECT items_id FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'front' LIMIT 1"
+    );
+    await page.goto(`${baseUrl}/front/networkport.form.php?id=${nativeFrontPortId}`, {
+      waitUntil: 'networkidle',
+    });
+    const nativeConnectedPanelPortLinks = await page
+      .locator('a[href*="/plugins/patchpanel/front/panelport.form.php?id=2605"]')
+      .count();
+    const nativeConnectedShadowPortLinks = await page
+      .locator('a[href*="/front/networkport.form.php?id="]')
+      .filter({ hasText: /PP-L1-IDF-A.*Port 1/i })
+      .count();
     await page.goto(`${baseUrl}/front/networkport.form.php?id=${socketSelection.networkport}`, {
       waitUntil: 'networkidle',
     });
@@ -180,6 +193,8 @@ function resetAp001Route() {
         && networkPortTabText.includes('NLH-R0101-TV01')
         && networkPortTabText.includes('NLH-R0101-WA-TV01')
         && networkPortTabText.includes('Connection details'),
+      native_connected_to_hides_shadow_port:
+        nativeConnectedPanelPortLinks === 1 && nativeConnectedShadowPortLinks === 0,
       disconnected_socket_ignored:
         !disconnectedRouteText.includes('NLH-R0101-TV01')
         && !disconnectedRouteText.includes('eth0 - NLH-R0101-TV01')
@@ -211,6 +226,7 @@ function resetAp001Route() {
       || !result.port_form_uses_physical_route_for_terminal
       || !result.connected_route_stops_at_access_switch
       || !result.networkport_tab_matches_socket_route
+      || !result.native_connected_to_hides_shadow_port
       || !result.disconnected_socket_ignored
       || !result.disconnected_port_form_ignores_stale_socket_device
       || !result.disconnected_socket_tab_warning

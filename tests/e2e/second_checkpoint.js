@@ -19,6 +19,60 @@ function queryDb(sql) {
   ], { encoding: 'utf8' }).trim();
 }
 
+function updatePanelName(panelId, name) {
+  const code = `
+chdir('/var/www/glpi');
+require_once 'src/Glpi/Application/ResourcesChecker.php';
+(new Glpi\\Application\\ResourcesChecker(getcwd()))->checkResources();
+require_once 'vendor/autoload.php';
+$kernel = new Glpi\\Kernel\\Kernel();
+$kernel->boot();
+$auth = new Auth();
+$auth->login('${username}', '${password}', true);
+$panel = new PluginPatchpanelPanel();
+if (!$panel->update(['id' => ${Number(panelId)}, 'name' => '${name}'])) {
+    exit(2);
+}
+`;
+  execFileSync('docker', ['exec', 'glpi-app', 'php', '-r', code]);
+}
+
+function updatePanelPortCount(panelId, portCount) {
+  const code = `
+chdir('/var/www/glpi');
+require_once 'src/Glpi/Application/ResourcesChecker.php';
+(new Glpi\\Application\\ResourcesChecker(getcwd()))->checkResources();
+require_once 'vendor/autoload.php';
+$kernel = new Glpi\\Kernel\\Kernel();
+$kernel->boot();
+$auth = new Auth();
+$auth->login('${username}', '${password}', true);
+$panel = new PluginPatchpanelPanel();
+if (!$panel->update(['id' => ${Number(panelId)}, 'port_count' => ${Number(portCount)}])) {
+    exit(2);
+}
+`;
+  execFileSync('docker', ['exec', 'glpi-app', 'php', '-r', code]);
+}
+
+function purgePanel(panelId) {
+  const code = `
+chdir('/var/www/glpi');
+require_once 'src/Glpi/Application/ResourcesChecker.php';
+(new Glpi\\Application\\ResourcesChecker(getcwd()))->checkResources();
+require_once 'vendor/autoload.php';
+$kernel = new Glpi\\Kernel\\Kernel();
+$kernel->boot();
+$auth = new Auth();
+$auth->login('${username}', '${password}', true);
+$panel = new PluginPatchpanelPanel();
+if (!$panel->getFromDB(${Number(panelId)}) || !$panel->delete(['id' => ${Number(panelId)}], true)) {
+    exit(2);
+}
+`;
+  execFileSync('docker', ['exec', 'glpi-app', 'php', '-r', code]);
+}
+
 async function selectValue(page, name, value, label) {
   await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
     const value = String(option.value);
@@ -86,7 +140,7 @@ async function selectValue(page, name, value, label) {
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
   );
   await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -110,6 +164,12 @@ async function selectValue(page, name, value, label) {
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
   const routeBody = await page.locator('body').innerText();
+
+  updatePanelName(panelId, `${panelName}-RENAMED`);
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${port3Id}`, {
+    waitUntil: 'networkidle',
+  });
+  const mediaAfterPanelRename = await page.locator('select[name="media"]').inputValue();
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
     waitUntil: 'networkidle',
@@ -172,18 +232,36 @@ async function selectValue(page, name, value, label) {
     rows: await page.locator('select[name="rows"]').inputValue(),
     media: await page.locator('select[name="media"]').inputValue(),
   };
-  const overrideToken = await page.locator('input[name="_glpi_csrf_token"]').last().inputValue();
-  const overrideCleanup = await page.request.post(
-    `${baseUrl}/plugins/patchpanel/front/panel.form.php`,
-    {
-      form: {
-        id: String(overridePanelId),
-        purge: '1',
-        _glpi_csrf_token: overrideToken,
-      },
-      maxRedirects: 0,
-    }
+
+  await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
+  await page.locator('.patchpanel-port').last().waitFor({ state: 'visible' });
+  const lastPortHref = await page.locator('.patchpanel-port').last().getAttribute('href');
+  const lastPortId = Number(new URL(lastPortHref, baseUrl).searchParams.get('id'));
+  await page.goto(new URL(lastPortHref, baseUrl).toString(), { waitUntil: 'networkidle' });
+  await selectValue(page, 'front_items_id', 255, 'NLH-F01-IDF-B-SW01 16');
+  await page.locator('button[name="update"], input[name="update"]').click();
+  await page.waitForLoadState('networkidle');
+  const shadowPortId = queryDb(
+    `SELECT id FROM glpi_networkports
+     WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = ${lastPortId} AND is_deleted = 0
+     LIMIT 1`
   );
+  await selectValue(page, 'front_items_id', 0, '-----');
+  await page.locator('button[name="update"], input[name="update"]').click();
+  await page.waitForLoadState('networkidle');
+
+  updatePanelPortCount(overridePanelId, 12);
+  const shrinkCleanup = {
+    removed_panel_port: queryDb(
+      `SELECT COUNT(*) FROM glpi_plugin_patchpanel_panelports WHERE id = ${lastPortId}`
+    ) === '0',
+    removed_shadow_port: queryDb(
+      `SELECT COUNT(*) FROM glpi_networkports WHERE id = ${Number(shadowPortId)}`
+    ) === '0',
+  };
+
+  purgePanel(overridePanelId);
+  const overrideCleanupStatus = 200;
 
   const result = {
     model_page_status: modelResponse.status(),
@@ -202,12 +280,14 @@ async function selectValue(page, name, value, label) {
     route_preserved:
       routeBody.includes('NLH-R0201-WA01')
       && routeBody.includes('NLH-F01-IDF-B-SW01'),
+    media_after_panel_rename: mediaAfterPanelRename,
     bulk_ui_removed: !visualBody.includes('Bulk port management'),
     bulk_route_status: bulkRouteResponse.status(),
     apply_model_text_removed: !applyModelTextVisible,
     cleanup_status: cleanupResponse.status(),
     existing_panel_model_override: overrideApplied,
-    override_cleanup_status: overrideCleanup.status(),
+    shrink_cleanup: shrinkCleanup,
+    override_cleanup_status: overrideCleanupStatus,
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
@@ -226,6 +306,7 @@ async function selectValue(page, name, value, label) {
     || result.port_result.rear !== '299'
     || result.port_result.front !== '227'
     || !result.route_preserved
+    || result.media_after_panel_rename !== 'fiber-mm'
     || !result.bulk_ui_removed
     || result.bulk_route_status !== 404
     || !result.apply_model_text_removed
@@ -233,6 +314,8 @@ async function selectValue(page, name, value, label) {
     || result.existing_panel_model_override.port_count !== '24'
     || result.existing_panel_model_override.rows !== '1'
     || result.existing_panel_model_override.media !== 'fiber-mm'
+    || !result.shrink_cleanup.removed_panel_port
+    || !result.shrink_cleanup.removed_shadow_port
     || ![200, 302, 303].includes(result.override_cleanup_status)
     || result.browser_errors.length
   ) {

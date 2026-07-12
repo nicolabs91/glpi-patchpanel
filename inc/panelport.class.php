@@ -49,7 +49,10 @@ class PluginPatchpanelPanelPort extends CommonDBChild
         return array_key_exists($media, self::getMediaOptions()) ? $media : 'other';
     }
 
-    public static function synchronizeForPanel(PluginPatchpanelPanel $panel): void
+    public static function synchronizeForPanel(
+        PluginPatchpanelPanel $panel,
+        bool $updateExistingMedia = false
+    ): void
     {
         global $DB;
 
@@ -78,10 +81,12 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 $layout = [
                     'row' => (int) floor(($number - 1) / $perRow) + 1,
                     'position' => (($number - 1) % $perRow) + 1,
-                    'media' => $panel->fields['media'],
                     'date_mod' => $now,
                 ];
                 if (isset($existing[$number])) {
+                    if ($updateExistingMedia) {
+                        $layout['media'] = $panel->fields['media'];
+                    }
                     $DB->update(self::getTable(), $layout, ['id' => $existing[$number]]);
                     continue;
                 }
@@ -90,6 +95,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                     'number' => $number,
                     'label' => sprintf(__('Patch port %02d', 'patchpanel'), $number),
                     'operational_state' => 'active',
+                    'media' => $panel->fields['media'],
                     'date_creation' => $now,
                 ]);
             }
@@ -106,18 +112,19 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 $extraIds[] = (int) $row['id'];
             }
             if ($extraIds) {
-                $DB->delete(
-                    self::getTable(),
-                    [
-                        'id' => $extraIds,
-                        'NOT' => [
-                            'id' => new \Glpi\DBAL\QuerySubQuery([
-                                'SELECT' => 'plugin_patchpanel_panelports_id',
-                                'FROM' => PluginPatchpanelPortEndpoint::getTable(),
-                            ]),
-                        ],
-                    ]
-                );
+                $connectedIds = [];
+                foreach ($DB->request([
+                    'SELECT' => ['plugin_patchpanel_panelports_id'],
+                    'FROM' => PluginPatchpanelPortEndpoint::getTable(),
+                    'WHERE' => ['plugin_patchpanel_panelports_id' => $extraIds],
+                ]) as $endpoint) {
+                    $connectedIds[] = (int) $endpoint['plugin_patchpanel_panelports_id'];
+                }
+                $deletableIds = array_values(array_diff($extraIds, array_unique($connectedIds)));
+                if ($deletableIds) {
+                    PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts($deletableIds);
+                    $DB->delete(self::getTable(), ['id' => $deletableIds]);
+                }
             }
             $DB->commit();
         } catch (Throwable $e) {

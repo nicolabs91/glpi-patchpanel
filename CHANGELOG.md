@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.2 - 2026-07-12
+
+- Always displayed the complete physical route, including core and gateway
+  steps, instead of hiding upstream infrastructure behind a `...` control.
+- Hid the internal managed shadow-network-port link from GLPI's native
+  connected-to display. The real patch-panel port remains the single visible
+  and clickable physical destination.
+- Used the patch-panel icon for the `Patch panel routes` tab on devices and
+  network ports.
+- Removed the separate Cable ID label from the panel-port form and CSV import.
+  The panel-port name/label is now the single label used to identify the cable.
+- Prevented access-switch downlinks and endpoint devices from being presented as
+  upstream core infrastructure in physical routes.
+- Preserved per-port media overrides when a panel is renamed or otherwise saved
+  without an explicit panel media change.
+- Rejected CSV files with duplicate column names instead of silently using the
+  last duplicate value.
+- Removed hidden GLPI shadow network ports before shrinking a panel and added a
+  health check for shadow ports whose PatchPanel port no longer exists.
+- Simplified switch network-port names to their zero-padded port number so GLPI
+  consistently displays the switch name followed by `01`, `02`, and so on.
+- Shortened the Docker example switch asset names to their technical identifiers
+  so route labels stay compact, for example `NLH-F01-IDF-A-SW01 · 01`.
+- Renamed every real switch network port to the full short switch identifier plus
+  its zero-padded number, for example `NLH-F01-IDF-A-SW01 01`, without repeating
+  the owner name in PatchPanel route labels.
+- Fixed GLPI's native `Connected to` relation so a switch/router port points to
+  the patch-panel port as its first physical hop instead of skipping directly
+  to the network port behind the wall outlet. Existing native links are rewired
+  during plugin installation or upgrade.
+
 ## 0.1.1 - 2026-07-04
 
 - Added a corrupt-data e2e checkpoint that injects broken socket references,
@@ -142,7 +173,7 @@
 - Extended browser and accessibility checkpoints to start from the empty list
   and create a panel through the visible add action.
 
-## 0.1.2 - 2026-06-12
+## 0.1.2 prerelease notes - 2026-06-12
 
 - Restored the legacy/default `front/patchpanel.php` entry point used by stale
   GLPI menus and browser caches.

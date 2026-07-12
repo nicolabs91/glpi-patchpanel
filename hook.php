@@ -3,6 +3,7 @@
 function plugin_patchpanel_install(): bool
 {
     PluginPatchpanelMigration::installSchema();
+    PluginPatchpanelPortEndpoint::synchronizeAllNativeNetworkPortLinks();
     return true;
 }
 

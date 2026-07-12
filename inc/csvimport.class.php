@@ -15,7 +15,6 @@ final class PluginPatchpanelCsvImport
         'rear_cable_color',
         'front_cable_color',
         'cable_id',
-        'cable_label',
     ];
 
     public static function analyze(string $csv): array
@@ -88,8 +87,18 @@ final class PluginPatchpanelCsvImport
             return ['headers' => [], 'rows' => [], 'errors' => [__('The CSV header is invalid.', 'patchpanel')]];
         }
         $headers = array_map(static fn($value) => trim(mb_strtolower((string) $value)), $headers);
+        $duplicateHeaders = array_keys(array_filter(
+            array_count_values($headers),
+            static fn(int $count): bool => $count > 1
+        ));
         $missing = array_values(array_diff(self::HEADERS, $headers));
         $unknown = array_values(array_diff($headers, self::HEADERS));
+        if ($duplicateHeaders) {
+            $errors[] = sprintf(
+                __('Duplicate CSV columns: %s', 'patchpanel'),
+                implode(', ', $duplicateHeaders)
+            );
+        }
         if ($missing) {
             $errors[] = sprintf(__('Missing CSV columns: %s', 'patchpanel'), implode(', ', $missing));
         }
@@ -249,11 +258,7 @@ final class PluginPatchpanelCsvImport
                         }
                     }
                 }
-                if (($input['cable_label'] ?? '') !== '') {
-                    $endpoint['cable_label'] = $input['cable_label'] === 'none'
-                        ? ''
-                        : (string) $input['cable_label'];
-                }
+                $endpoint['cable_label'] = null;
             }
             $desired['endpoints'][$side] = $endpoint;
         }
@@ -425,7 +430,6 @@ final class PluginPatchpanelCsvImport
             'front_items_id' => $front['items_id'],
             'front_cable_color' => $front['cable_color'] ?? '',
             'front_cables_id' => $front['cables_id'],
-            'front_cable_label' => $front['cable_label'],
         ];
     }
 

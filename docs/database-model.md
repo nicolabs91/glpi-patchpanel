@@ -95,8 +95,15 @@ checkpoint before relying on it in the UI.
 - Use `Glpi\Socket` for remote endpoints and room connection points.
 - Use `NetworkPort` for switch/router/firewall/front patching points.
 - Use GLPI socket `networkports_id` to resolve the actual terminal device port.
-- Preserve native GLPI cable links when editing simplified PatchPanel cable ID
-  and color fields.
+- Link the front switch/router port natively to the managed shadow port of the
+  PatchPanel port. GLPI's `Connected to` field therefore shows the first
+  physical hop; the rear socket's terminal device port is route data, not the
+  native peer of the switch/router port.
+- Preserve native GLPI cable links when editing a PatchPanel port and color
+  fields.
+- Treat `NetworkPort` rows owned by `PluginPatchpanelPanelPort` as managed
+  shadow records: remove them before deleting their panel port and report any
+  orphan shadow rows in the health check.
 - Keep rights based on GLPI `networking` permissions unless a later feature
   introduces explicit profile handling.
 - Apply entity restrictions in list, health, import, and explorer views.

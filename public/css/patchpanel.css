@@ -306,9 +306,7 @@
 }
 
 .patchpanel-route-step:hover,
-.patchpanel-route-step:focus-visible,
-.patchpanel-route-more-toggle:hover,
-.patchpanel-route-more-toggle:focus-visible {
+.patchpanel-route-step:focus-visible {
     background: color-mix(in srgb, var(--patchpanel-route-color, var(--tblr-primary)) 18%, var(--tblr-bg-surface));
 }
 
@@ -321,54 +319,6 @@
     color: var(--tblr-secondary);
     font-size: 1.2rem;
     font-weight: 700;
-}
-
-.patchpanel-route-more {
-    display: inline-flex;
-}
-
-.patchpanel-route-more-toggle {
-    align-items: center;
-    background: var(--tblr-bg-surface-secondary);
-    border: 2px dashed var(--patchpanel-route-color, var(--tblr-border-color));
-    border-radius: .5rem;
-    color: var(--tblr-body-color);
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 1.15rem;
-    font-weight: 700;
-    line-height: 1;
-    min-height: 2.3rem;
-    padding: .35rem .7rem;
-}
-
-.patchpanel-route-more-toggle::marker,
-.patchpanel-route-more-toggle::-webkit-details-marker {
-    display: none;
-}
-
-.patchpanel-route-more[open] {
-    align-items: center;
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: .4rem;
-}
-
-.patchpanel-route-more[open] .patchpanel-route-more-toggle {
-    border-style: solid;
-}
-
-.patchpanel-route-more[open] .patchpanel-route-more-toggle::after {
-    content: "x";
-    font-size: .9rem;
-    margin-left: .35rem;
-}
-
-.patchpanel-route-more-steps {
-    align-items: center;
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: .4rem;
 }
 
 .patchpanel-route-empty {

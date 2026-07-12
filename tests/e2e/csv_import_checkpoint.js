@@ -14,7 +14,6 @@ const headers = [
   'rear_cable_color',
   'front_cable_color',
   'cable_id',
-  'cable_label',
 ].join(',');
 
 async function uploadCsv(page, content, filename) {
@@ -57,10 +56,21 @@ async function uploadCsv(page, content, filename) {
   await page.goto(`${baseUrl}/plugins/patchpanel/front/csvimport.php`, {
     waitUntil: 'networkidle',
   });
+  const duplicateHeaderCsv = [
+    headers.replace('panel,port', 'panel,panel,port'),
+    `${panelName},${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
+  ].join('\n');
+  await uploadCsv(page, duplicateHeaderCsv, 'duplicate-header.csv');
+  const duplicateHeaderBody = await page.locator('body').innerText();
+  const duplicateHeaderApplyButtons = await page.locator('button[name="apply_csv"]').count();
+
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/csvimport.php`, {
+    waitUntil: 'networkidle',
+  });
   const invalidCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0,CSV-001`,
-    `${panelName},2,CSV Port 02,active,copper,24,227,#198754,#dc3545,0,CSV-002`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
+    `${panelName},2,CSV Port 02,active,copper,24,227,#198754,#dc3545,0`,
   ].join('\n');
   await uploadCsv(page, invalidCsv, 'invalid-duplicate.csv');
   const invalidBody = await page.locator('body').innerText();
@@ -71,8 +81,8 @@ async function uploadCsv(page, content, filename) {
   });
   const validCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0,CSV-001`,
-    `${panelName},2,CSV Port 02,active,copper,25,227,#198754,#dc3545,0,CSV-002`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
+    `${panelName},2,CSV Port 02,active,copper,25,227,#198754,#dc3545,0`,
   ].join('\n');
   await uploadCsv(page, validCsv, 'valid-import.csv');
   const previewBody = await page.locator('body').innerText();
@@ -179,6 +189,9 @@ async function uploadCsv(page, content, filename) {
   );
 
   const result = {
+    duplicate_header_blocked:
+      duplicateHeaderBody.includes('Duplicate CSV columns: panel')
+      && duplicateHeaderApplyButtons === 0,
     duplicate_blocked:
       invalidBody.includes('also used on CSV line 2') && invalidApplyButtons === 0,
     preview_ready_rows: readyRows,
@@ -211,6 +224,7 @@ async function uploadCsv(page, content, filename) {
 
   if (
     !result.duplicate_blocked
+    || !result.duplicate_header_blocked
     || result.preview_ready_rows !== 2
     || !result.preview_has_changes
     || !result.apply_message

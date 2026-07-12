@@ -72,6 +72,15 @@ const orphanPanels = scalar(`
   WHERE pa.id IS NULL
 `, 'count');
 
+const orphanShadowNetworkPorts = scalar(`
+  SELECT COUNT(*) AS count
+  FROM glpi_networkports np
+  LEFT JOIN glpi_plugin_patchpanel_panelports p ON p.id = np.items_id
+  WHERE np.itemtype = 'PluginPatchpanelPanelPort'
+    AND np.is_deleted = 0
+    AND p.id IS NULL
+`, 'count');
+
 const duplicatePortSides = scalar(`
   SELECT COUNT(*) AS count
   FROM (
@@ -150,6 +159,7 @@ const result = {
   integrity: {
     orphanEndpoints,
     orphanPanels,
+    orphanShadowNetworkPorts,
     duplicatePortSides,
     duplicateEndpoints,
     invalidEndpointTypes,
@@ -167,6 +177,7 @@ if (
   Object.values(indexResults).some(value => !value)
   || orphanEndpoints !== 0
   || orphanPanels !== 0
+  || orphanShadowNetworkPorts !== 0
   || duplicatePortSides !== 0
   || duplicateEndpoints !== 0
   || invalidEndpointTypes !== 0

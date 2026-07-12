@@ -18,8 +18,9 @@ switch/router port belong together.
   and media type.
 - View a visual patch-panel grid with free, partially connected and connected
   port states.
-- Edit each panel port with a label, operational state, media type, rear
-  connection point, front network port, patch cable color and cable ID.
+- Edit each panel port with a name/label, operational state, media type, rear
+  connection point, front network port and patch cable color. The port name is
+  also the cable label; there is no separate cable ID label.
 - Follow the physical route from endpoint device to connection point, panel
   port, access switch and, when discoverable through GLPI network links, upstream
   core or gateway equipment.
@@ -41,7 +42,7 @@ Administrative tools are available from the plugin settings page:
 
 ## Compatibility
 
-PatchPanel `0.1.1` targets GLPI 11 and PHP 8.2 or newer.
+PatchPanel `0.1.2` targets GLPI 11 and PHP 8.2 or newer.
 
 ## Installation and upgrade
 

@@ -168,6 +168,9 @@ async function selectValue(page, name, value, label) {
   if (await page.locator('[name="front_cables_id"]').count()) {
     throw new Error('The redundant GLPI cable field is visible in the standard port form');
   }
+  if (await page.locator('[name="front_cable_label"]').count()) {
+    throw new Error('The removed Cable ID field is visible in the standard port form');
+  }
   const portWorkflow = {
     visible: await page.locator('.patchpanel-port-workflow').isVisible(),
     status: await page.locator('.patchpanel-port-workflow').innerText(),
@@ -183,9 +186,8 @@ async function selectValue(page, name, value, label) {
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
   );
   await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
   await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
-  await page.fill('input[name="front_cable_label"]', 'CP-V2-E2E');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   await page.locator('.patchpanel-route').waitFor({ state: 'visible' });
@@ -195,7 +197,6 @@ async function selectValue(page, name, value, label) {
     element.textContent.replace(/\s+/g, ' ').trim()
   );
   const routeMoreToggles = await page.locator('.patchpanel-route-more-toggle').count();
-  const routeMoreCollapsed = await page.locator('.patchpanel-route-more').evaluate(element => !element.open);
   const routeLinks = await page.locator('.patchpanel-route-step[href]').count();
   const routeZones = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
     steps.map(step => step.getAttribute('data-route-zone'))
@@ -253,10 +254,11 @@ async function selectValue(page, name, value, label) {
       socket: routeBody.includes('NLH-R0201-WA01'),
       panel: routeBody.includes(panelName),
       access_switch: routeBody.includes('NLH-F01-IDF-B-SW01'),
-      core_collapsed_by_default: routeMoreCollapsed,
+      full_route_visible: routeBody.includes('NLH-MDF-CORE-SW01')
+        && routeBody.includes('NLH-MDF-FW01'),
       core_switch: routeFullText.includes('NLH-MDF-CORE-SW01'),
       firewall_router: routeFullText.includes('NLH-MDF-FW01'),
-      more_toggle: routeMoreToggles === 1,
+      more_toggle_removed: routeMoreToggles === 0,
       clickable_steps: routeLinks,
       zones: routeZones,
       step_colors: routeStepColors,

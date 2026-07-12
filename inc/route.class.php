@@ -6,6 +6,7 @@ final class PluginPatchpanelRoute extends CommonGLPI
     private static array $ownerStepCache = [];
     private static array $networkEquipmentNeighboursCache = [];
     private static array $routerFirewallCache = [];
+    private static array $infrastructureEquipmentCache = [];
 
     public static function getTypeName($nb = 0): string
     {
@@ -46,7 +47,6 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $endpoint = $endpoints[$side];
             $step = self::stepForReference($endpoint['itemtype'], (int) $endpoint['items_id']);
             $step['cable_color'] = $endpoint['cable_color'];
-            $step['cable_label'] = $endpoint['cable_label'];
             $step['cables_id'] = (int) $endpoint['cables_id'];
             $result[$side] = $step;
             if ($step['broken']) {
@@ -174,7 +174,12 @@ final class PluginPatchpanelRoute extends CommonGLPI
         $ownerLabel = trim((string) ($ownerStep['label'] ?? ''));
         $portLabel = trim((string) ($portStep['label'] ?? ''));
         $combined = $ownerStep;
-        $combined['label'] = trim($ownerLabel . ($portLabel !== '' ? ' · ' . $portLabel : ''));
+        $portContainsOwner = $ownerLabel !== ''
+            && $portLabel !== ''
+            && str_starts_with($portLabel, $ownerLabel . ' ');
+        $combined['label'] = $portContainsOwner
+            ? $portLabel
+            : trim($ownerLabel . ($portLabel !== '' ? ' · ' . $portLabel : ''));
         $combined['port'] = $portStep;
         $combined['broken'] = !empty($ownerStep['broken']) || !empty($portStep['broken']);
         $combined['references'] = [
@@ -238,7 +243,10 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $current = array_shift($queue);
             foreach (self::getNetworkEquipmentNeighbours($current['equipment_id']) as $edge) {
                 $nextId = (int) $edge['equipment_id'];
-                if (isset($current['visited'][$nextId])) {
+                if (
+                    isset($current['visited'][$nextId])
+                    || !self::isInfrastructureNetworkEquipment($nextId)
+                ) {
                     continue;
                 }
 
@@ -337,6 +345,25 @@ final class PluginPatchpanelRoute extends CommonGLPI
             && preg_match('/router|firewall|gateway/', $row['descriptor']) === 1;
     }
 
+    private static function isInfrastructureNetworkEquipment(int $equipmentId): bool
+    {
+        global $DB;
+
+        if (isset(self::$infrastructureEquipmentCache[$equipmentId])) {
+            return self::$infrastructureEquipmentCache[$equipmentId];
+        }
+
+        $sql = "SELECT LOWER(CONCAT(ne.name, ' ', COALESCE(t.name, ''))) AS descriptor
+                FROM glpi_networkequipments ne
+                LEFT JOIN glpi_networkequipmenttypes t
+                  ON t.id = ne.networkequipmenttypes_id
+                WHERE ne.id = " . $equipmentId;
+        $result = $DB->doQuery($sql);
+        $row = $result ? $result->fetch_assoc() : null;
+        return self::$infrastructureEquipmentCache[$equipmentId] = $row !== null
+            && preg_match('/switch|router|firewall|gateway/', $row['descriptor']) === 1;
+    }
+
     public static function render(int $portId): void
     {
         self::renderSteps(self::getStepsForPort($portId));
@@ -350,35 +377,11 @@ final class PluginPatchpanelRoute extends CommonGLPI
             echo "<span class='patchpanel-route-empty'><i class='ti ti-circle-dashed'></i> " .
                 __('No route registered yet', 'patchpanel') . '</span>';
         }
-        $primarySteps = array_values(array_filter(
-            $steps,
-            static fn(array $step) => empty($step['is_upstream'])
-        ));
-        $upstreamSteps = array_values(array_filter(
-            $steps,
-            static fn(array $step) => !empty($step['is_upstream'])
-        ));
-        foreach ($primarySteps as $index => $step) {
+        foreach (array_values($steps) as $index => $step) {
             if ($index > 0) {
                 echo "<span class='patchpanel-route-arrow' aria-hidden='true'>→</span>";
             }
             self::renderStep($step);
-        }
-        if ($upstreamSteps) {
-            if ($primarySteps) {
-                echo "<span class='patchpanel-route-arrow' aria-hidden='true'>→</span>";
-            }
-            echo "<details class='patchpanel-route-more'>";
-            echo "<summary class='patchpanel-route-more-toggle' aria-label='" .
-                htmlescape(__('Show upstream core route', 'patchpanel')) . "'>...</summary>";
-            echo "<span class='patchpanel-route-more-steps'>";
-            foreach ($upstreamSteps as $index => $step) {
-                if ($index > 0) {
-                    echo "<span class='patchpanel-route-arrow' aria-hidden='true'>→</span>";
-                }
-                self::renderStep($step);
-            }
-            echo '</span></details>';
         }
         echo '</nav>';
     }

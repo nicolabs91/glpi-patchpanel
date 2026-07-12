@@ -84,7 +84,6 @@ if (isset($_POST['update'])) {
         'rear_cable_color',
         'front_items_id',
         'front_cable_color',
-        'front_cable_label',
         'front_cables_id',
     ] as $field) {
         unset($portInput[$field]);

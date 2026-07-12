@@ -67,7 +67,7 @@ echo "<form method='post' enctype='multipart/form-data'>";
 echo "<label class='form-label'>" . htmlescape(__('CSV file')) . '</label>';
 echo "<input class='form-control' type='file' name='csv_file' accept='.csv,text/csv' required>";
 echo "<div class='form-text'>" . htmlescape(
-    'panel,port,label,operational_state,media,rear_socket_id,front_networkport_id,rear_cable_color,front_cable_color,cable_id,cable_label'
+    'panel,port,label,operational_state,media,rear_socket_id,front_networkport_id,rear_cable_color,front_cable_color,cable_id'
 ) . '</div>';
 echo "<button class='btn btn-primary mt-3' type='submit' name='preview_csv' value='1'>" .
     "<i class='ti ti-file-search'></i> " . htmlescape(__('Preview CSV', 'patchpanel')) . '</button>';

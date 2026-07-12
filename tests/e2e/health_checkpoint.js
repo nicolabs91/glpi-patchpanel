@@ -60,7 +60,7 @@ const password = process.env.GLPI_PASSWORD || 'glpi';
     result.status !== 200
     || !result.healthy
     || !Object.values(result.headings).every(Boolean)
-    || result.row_count < 15
+    || result.row_count < 19
     || result.missing.length
     || result.needs_attention.length
     || result.browser_errors.length

@@ -135,13 +135,16 @@ class PluginPatchpanelPanel extends CommonDBTM
     public function post_addItem(): void
     {
         parent::post_addItem();
-        PluginPatchpanelPanelPort::synchronizeForPanel($this);
+        PluginPatchpanelPanelPort::synchronizeForPanel($this, true);
     }
 
     public function post_updateItem($history = true): void
     {
         parent::post_updateItem($history);
-        PluginPatchpanelPanelPort::synchronizeForPanel($this);
+        PluginPatchpanelPanelPort::synchronizeForPanel(
+            $this,
+            in_array('media', $this->updates, true)
+        );
     }
 
     public function cleanDBonPurge()

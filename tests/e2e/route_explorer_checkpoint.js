@@ -70,7 +70,7 @@ async function selectValue(page, name, value, label) {
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
   );
   await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 - Gi1/0/02');
+  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -126,7 +126,9 @@ async function selectValue(page, name, value, label) {
     search_has_endpoint: searchBody.includes('NLH-R0201-WA01'),
     search_has_access_switch: searchBody.includes('NLH-F01-IDF-B-SW01'),
     search_has_core: searchFullText.includes('NLH-MDF-CORE-SW01'),
-    route_more: routeMoreCount >= 1,
+    full_route_visible: routeMoreCount === 0
+      && searchBody.includes('NLH-MDF-CORE-SW01')
+      && searchBody.includes('NLH-MDF-FW01'),
     search_has_impact_link: Boolean(impactHref) && Boolean(impactLabel),
     clickable_steps: routeStepCount,
     impact_filter_visible:
@@ -148,7 +150,7 @@ async function selectValue(page, name, value, label) {
     || !result.search_has_endpoint
     || !result.search_has_access_switch
     || !result.search_has_core
-    || !result.route_more
+    || !result.full_route_visible
     || !result.search_has_impact_link
     || result.clickable_steps < 7
     || !result.impact_filter_visible
