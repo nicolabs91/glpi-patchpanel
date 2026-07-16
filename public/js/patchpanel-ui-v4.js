@@ -48,6 +48,85 @@
     }
   }
 
+  function getSelectedNumber(field) {
+    return Number.parseInt(field?.value || '0', 10) || 0;
+  }
+
+  async function keepPatchPanelInsideRack(form) {
+    const itemType = form.querySelector('select[name="itemtype"]');
+    const item = form.querySelector('select[name="items_id"]');
+    const rack = form.querySelector('select[name="racks_id"]');
+    const position = form.querySelector('select[name="position"]');
+    if (itemType?.value !== 'PluginPatchpanelPanel' || !item || !rack || !position) {
+      return;
+    }
+
+    const panelId = getSelectedNumber(item);
+    const rackId = getSelectedNumber(rack);
+    const currentPosition = getSelectedNumber(position);
+    if (panelId <= 0 || rackId <= 0 || currentPosition <= 0) {
+      return;
+    }
+
+    const response = await fetch(
+      `${CFG_GLPI.root_doc}/plugins/patchpanel/front/panellayout.php?id=${panelId}&rack_id=${rackId}`,
+      { credentials: 'same-origin' }
+    );
+    if (!response.ok) {
+      return;
+    }
+
+    const layout = await response.json();
+    const requiredUnits = Math.max(1, Number.parseInt(layout.required_units || '1', 10));
+    const rackUnits = Math.max(0, Number.parseInt(layout.rack_units || '0', 10));
+    if (rackUnits <= 0) {
+      return;
+    }
+    const highestStart = rackUnits - requiredUnits + 1;
+    if (currentPosition > highestStart) {
+      if (!Array.from(position.options).some(option => option.value === String(highestStart))) {
+        position.add(new Option(String(highestStart), String(highestStart), true, true));
+      }
+      setSelectValue(form, 'position', String(highestStart));
+    }
+  }
+
+  function bindRackPlacementForms(root = document) {
+    const forms = Array.from(root.querySelectorAll?.('form') || []);
+    if (root instanceof HTMLFormElement) {
+      forms.push(root);
+    }
+
+    forms.forEach((form) => {
+      if (!form.querySelector('select[name="itemtype"]')
+        || !form.querySelector('select[name="position"]')) {
+        return;
+      }
+
+      const item = form.querySelector('select[name="items_id"]');
+      if (item && item.dataset.patchpanelRackBoundsBound !== '1') {
+        item.dataset.patchpanelRackBoundsBound = '1';
+        item.addEventListener('change', () => keepPatchPanelInsideRack(form));
+        if (window.jQuery) {
+          window.jQuery(item).on('change.patchpanelRackBounds', () => keepPatchPanelInsideRack(form));
+        }
+      }
+
+      if (form.dataset.patchpanelRackBoundsBound !== '1') {
+        form.dataset.patchpanelRackBoundsBound = '1';
+        form.addEventListener('submit', async (event) => {
+          if (form.dataset.patchpanelRackBoundsSubmitting === '1') {
+            return;
+          }
+          event.preventDefault();
+          await keepPatchPanelInsideRack(form);
+          form.dataset.patchpanelRackBoundsSubmitting = '1';
+          form.requestSubmit(event.submitter || undefined);
+        });
+      }
+    });
+  }
+
   async function cleanupSocketDevice(socketId, form) {
     const token = form.querySelector('input[name="_glpi_csrf_token"]')?.value || '';
     const body = new URLSearchParams();
@@ -69,6 +148,7 @@
 
   async function boot() {
     hideManagedShadowPortLinks();
+    bindRackPlacementForms();
     let rescanScheduled = false;
     new MutationObserver(() => {
       if (rescanScheduled) {
@@ -81,6 +161,7 @@
         // completed document so the owner and its managed network port are
         // handled even when they arrived in separate DOM updates.
         hideManagedShadowPortLinks(document);
+        bindRackPlacementForms(document);
       });
     }).observe(document.body, { childList: true, subtree: true });
 

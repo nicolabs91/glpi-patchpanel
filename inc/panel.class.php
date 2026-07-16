@@ -54,7 +54,6 @@ class PluginPatchpanelPanel extends CommonDBTM
         $tabs = [];
         $this->addDefaultFormTab($tabs)
             ->addStandardTab('PluginPatchpanelPanelPort', $tabs, $options)
-            ->addStandardTab(Item_Rack::class, $tabs, $options)
             ->addStandardTab(Log::class, $tabs, $options);
         return $tabs;
     }

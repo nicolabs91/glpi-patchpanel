@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3 - 2026-07-16
+
+- Made patch panels fully rackable in GLPI 11 by using the datacenter model
+  contract and adding the required rack dimensions to panel models.
+- Added a safe upgrade migration for rack model fields and legacy PatchPanel
+  rack relations, including cleanup of orphaned legacy relations.
+- Fixed 48-port 2U models so they occupy two rack units.
+- Prevented `Item is out of rack bounds` when a multi-unit patch panel is
+  selected at the top of a rack by automatically choosing the highest valid
+  starting unit.
+- Expanded the browser regression test to create a 2U panel, select it from a
+  rack, verify the position correction, save it, and check for browser errors.
+
 ## 0.1.2 - 2026-07-12
 
 - Always displayed the complete physical route, including core and gateway

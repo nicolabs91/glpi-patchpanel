@@ -1,6 +1,6 @@
 <?php
 
-class PluginPatchpanelPanelModel extends CommonDropdown
+class PluginPatchpanelPanelModel extends CommonDCModelDropdown
 {
     public static $rightname = 'networking';
 
@@ -29,6 +29,15 @@ class PluginPatchpanelPanelModel extends CommonDropdown
         }
         if (isset($input['media'])) {
             $input['media'] = PluginPatchpanelPanelPort::normalizeMedia((string) $input['media']);
+        }
+        if (isset($input['required_units'])) {
+            $input['required_units'] = max(1, min(100, (int) $input['required_units']));
+        }
+        if (isset($input['depth'])) {
+            $input['depth'] = max(0.0, min(1.0, (float) $input['depth']));
+        }
+        if (isset($input['weight'])) {
+            $input['weight'] = max(0, (float) $input['weight']);
         }
         return $input;
     }
@@ -60,6 +69,21 @@ class PluginPatchpanelPanelModel extends CommonDropdown
             'value' => $this->fields['port_count'] ?? 24,
             'min' => 1,
             'max' => 512,
+        ]);
+        echo '</td></tr>';
+
+        echo "<tr class='tab_bg_1'><td>" . __('Rack units') . "</td><td>";
+        Dropdown::showNumber('required_units', [
+            'value' => $this->fields['required_units'] ?? 1,
+            'min' => 1,
+            'max' => 100,
+        ]);
+        echo '</td><td>' . __('Weight') . '</td><td>';
+        echo Html::input('weight', [
+            'type' => 'number',
+            'value' => $this->fields['weight'] ?? 0,
+            'min' => 0,
+            'step' => '0.01',
         ]);
         echo '</td></tr>';
 

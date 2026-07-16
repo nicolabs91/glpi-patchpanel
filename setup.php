@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
     die('Direct access is not allowed');
 }
 
-define('PLUGIN_PATCHPANEL_VERSION', '0.1.2');
+define('PLUGIN_PATCHPANEL_VERSION', '0.1.3');
 define('PLUGIN_PATCHPANEL_MIN_GLPI', '11.0.0');
 define('PLUGIN_PATCHPANEL_MAX_GLPI', '11.99.99');
 
@@ -49,7 +49,7 @@ function plugin_init_patchpanel(): void
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][NetworkPort_NetworkPort::class]
         = 'plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect';
     $PLUGIN_HOOKS['add_css']['patchpanel'] = 'public/css/patchpanel.css';
-    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/patchpanel-ui-v2.js';
+    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/patchpanel-ui-v4.js';
 }
 
 function plugin_version_patchpanel(): array

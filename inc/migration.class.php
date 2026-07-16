@@ -14,9 +14,16 @@ final class PluginPatchpanelMigration
 CREATE TABLE `glpi_plugin_patchpanel_panelmodels` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
+  `product_number` varchar(255) DEFAULT NULL,
   `port_count` smallint unsigned NOT NULL DEFAULT 24,
   `rows` tinyint unsigned NOT NULL DEFAULT 1,
   `media` varchar(32) NOT NULL DEFAULT 'copper',
+  `weight` decimal(20,4) NOT NULL DEFAULT 0,
+  `required_units` int NOT NULL DEFAULT 1,
+  `depth` float NOT NULL DEFAULT 0.2,
+  `is_half_rack` tinyint NOT NULL DEFAULT 0,
+  `picture_front` text DEFAULT NULL,
+  `picture_rear` text DEFAULT NULL,
   `comment` text DEFAULT NULL,
   `date_mod` timestamp NULL DEFAULT NULL,
   `date_creation` timestamp NULL DEFAULT NULL,
@@ -152,8 +159,36 @@ SQL,
             }
         }
 
+        self::upgradePanelModelTable();
         self::upgradeMigrationTable();
         self::seedModels();
+        self::repairLegacyRackRelations();
+    }
+
+    private static function upgradePanelModelTable(): void
+    {
+        global $DB;
+
+        $table = 'glpi_plugin_patchpanel_panelmodels';
+        foreach ([
+            'product_number' => 'varchar(255) DEFAULT NULL',
+            'weight' => 'decimal(20,4) NOT NULL DEFAULT 0',
+            'required_units' => 'int NOT NULL DEFAULT 1',
+            'depth' => 'float NOT NULL DEFAULT 0.2',
+            'is_half_rack' => 'tinyint NOT NULL DEFAULT 0',
+            'picture_front' => 'text DEFAULT NULL',
+            'picture_rear' => 'text DEFAULT NULL',
+        ] as $field => $definition) {
+            if (!$DB->fieldExists($table, $field)) {
+                $DB->doQuery("ALTER TABLE `$table` ADD `$field` $definition");
+            }
+        }
+
+        $DB->doQuery(
+            "UPDATE `$table`
+             SET `required_units` = GREATEST(1, `rows`)
+             WHERE `required_units` = 1 AND `rows` > 1"
+        );
     }
 
     private static function upgradeMigrationTable(): void
@@ -173,6 +208,63 @@ SQL,
                 "ALTER TABLE `$table`
                  ADD `date_mod` timestamp NULL DEFAULT NULL AFTER `date_creation`"
             );
+        }
+    }
+
+    private static function repairLegacyRackRelations(): void
+    {
+        global $DB;
+
+        if (!$DB->tableExists(Item_Rack::getTable())) {
+            return;
+        }
+
+        foreach ($DB->request([
+            'FROM' => Item_Rack::getTable(),
+            'WHERE' => ['itemtype' => 'PluginPatchpanelPatchpanel'],
+        ]) as $rackItem) {
+            $sourceId = (int) $rackItem['items_id'];
+            $mapping = self::getMapping(self::LEGACY_PANELS, $sourceId);
+            $targetId = (int) ($mapping['target_items_id'] ?? 0);
+
+            if ($targetId <= 0 && $DB->tableExists(self::LEGACY_PANELS)) {
+                $legacy = $DB->request([
+                    'SELECT' => ['name', 'entities_id'],
+                    'FROM' => self::LEGACY_PANELS,
+                    'WHERE' => ['id' => $sourceId],
+                    'LIMIT' => 1,
+                ])->current();
+                if ($legacy) {
+                    $target = $DB->request([
+                        'SELECT' => ['id'],
+                        'FROM' => PluginPatchpanelPanel::getTable(),
+                        'WHERE' => [
+                            'name' => $legacy['name'],
+                            'entities_id' => (int) $legacy['entities_id'],
+                        ],
+                        'LIMIT' => 1,
+                    ])->current();
+                    $targetId = (int) ($target['id'] ?? 0);
+                }
+            }
+
+            if ($targetId > 0 && countElementsInTable(
+                PluginPatchpanelPanel::getTable(),
+                ['id' => $targetId]
+            ) > 0) {
+                $DB->update(Item_Rack::getTable(), [
+                    'itemtype' => PluginPatchpanelPanel::class,
+                    'items_id' => $targetId,
+                ], ['id' => (int) $rackItem['id']]);
+                continue;
+            }
+
+            if (
+                !$DB->tableExists(self::LEGACY_PANELS)
+                || countElementsInTable(self::LEGACY_PANELS, ['id' => $sourceId]) === 0
+            ) {
+                $DB->delete(Item_Rack::getTable(), ['id' => (int) $rackItem['id']]);
+            }
         }
     }
 
@@ -210,9 +302,9 @@ SQL,
         }
 
         foreach ([
-            ['name' => '24-port copper, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'copper'],
-            ['name' => '48-port copper, 2U', 'port_count' => 48, 'rows' => 2, 'media' => 'copper'],
-            ['name' => '24-port multimode fiber, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'fiber-mm'],
+            ['name' => '24-port copper, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'copper', 'required_units' => 1],
+            ['name' => '48-port copper, 2U', 'port_count' => 48, 'rows' => 2, 'media' => 'copper', 'required_units' => 2],
+            ['name' => '24-port multimode fiber, 1U', 'port_count' => 24, 'rows' => 1, 'media' => 'fiber-mm', 'required_units' => 1],
         ] as $model) {
             $existing = $DB->request([
                 'SELECT' => ['id'],
@@ -228,6 +320,7 @@ SQL,
                     'port_count' => $model['port_count'],
                     'rows' => $model['rows'],
                     'media' => $model['media'],
+                    'required_units' => $model['required_units'],
                 ], ['id' => $existing['id']]);
             }
         }
