@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4 - 2026-07-20
+
+- Replaced the wall-outlet-only remote endpoint field with one searchable,
+  grouped selector for available GLPI wall outlets and device network ports.
+- Excluded deleted, inaccessible, managed PatchPanel shadow ports and endpoints
+  already assigned to another panel port while preserving existing selections.
+- Kept existing 0.1.3 wall-outlet connections and front-side patch cable
+  behavior compatible during upgrades.
+
 ## 0.1.3 - 2026-07-16
 
 - Made patch panels fully rackable in GLPI 11 by using the datacenter model

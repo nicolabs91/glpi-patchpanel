@@ -308,7 +308,7 @@ async function openTabByText(page, text) {
         OR networkports_id_2 IN (${TEST_TERMINAL_PORT_ID}, ${TEST_FRONT_PORT_ID})`
   );
 
-  await selectValue(page, 'rear_items_id', TEST_SOCKET_ID, '123');
+  await selectValue(page, 'rear_endpoint', `Glpi\\Socket:${TEST_SOCKET_ID}`, '123');
   await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
@@ -356,7 +356,7 @@ async function openTabByText(page, text) {
   });
   const afterFullNativeDisconnect = {
     status: fullNativeDisconnectResponse.status(),
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
     front_endpoint_count: queryDb(
       `SELECT COUNT(*)
@@ -379,7 +379,7 @@ async function openTabByText(page, text) {
   });
   const afterFullNativeConnect = {
     relation_id: fullNativeConnectRelationId,
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
     front_endpoint_count: queryDb(
       `SELECT COUNT(*)
@@ -487,7 +487,7 @@ async function openTabByText(page, text) {
     waitUntil: 'networkidle',
   });
   const afterRearDisconnect = {
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
   const nativeLinkAfterRearDisconnect = queryDb(
@@ -514,7 +514,7 @@ async function openTabByText(page, text) {
     waitUntil: 'networkidle',
   });
   const afterFrontDisconnect = {
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
 
@@ -582,12 +582,12 @@ async function openTabByText(page, text) {
     || result.native_link_after_save !== result.full_shadow_port_id
     || result.native_link_after_save === result.terminal_port_id
     || ![200, 302, 303].includes(result.after_full_native_disconnect.status)
-    || result.after_full_native_disconnect.rear !== String(TEST_SOCKET_ID)
+    || result.after_full_native_disconnect.rear !== `Glpi\\Socket:${TEST_SOCKET_ID}`
     || result.after_full_native_disconnect.front !== '0'
     || result.after_full_native_disconnect.front_endpoint_count !== '0'
     || result.after_full_native_disconnect.native_link_count !== '0'
     || !result.after_full_native_connect.relation_id
-    || result.after_full_native_connect.rear !== String(TEST_SOCKET_ID)
+    || result.after_full_native_connect.rear !== `Glpi\\Socket:${TEST_SOCKET_ID}`
     || result.after_full_native_connect.front !== String(TEST_FRONT_PORT_ID)
     || result.after_full_native_connect.front_endpoint_count !== '1'
     || result.native_link_after_native_reconnect !== result.full_shadow_port_id

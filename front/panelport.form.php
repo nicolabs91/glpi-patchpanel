@@ -80,6 +80,7 @@ if (isset($_POST['update'])) {
     $port->check($_POST['id'], UPDATE);
     $portInput = $_POST;
     foreach ([
+        'rear_endpoint',
         'rear_items_id',
         'rear_cable_color',
         'front_items_id',

@@ -185,7 +185,7 @@ async function selectValue(page, name, value, label) {
   queryDb(
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
   );
-  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
+  await selectValue(page, 'rear_endpoint', 'Glpi\\Socket:299', 'NLH-R0201-WA01 - Room 0201 wall outlet');
   await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
   await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
   await page.locator('button[name="update"], input[name="update"]').click();

@@ -104,7 +104,7 @@ const duplicateEndpoints = scalar(`
 const invalidEndpointTypes = scalar(`
   SELECT COUNT(*) AS count
   FROM glpi_plugin_patchpanel_portendpoints
-  WHERE (side = 'rear' AND itemtype <> 'Glpi\\\\Socket')
+  WHERE (side = 'rear' AND itemtype NOT IN ('Glpi\\\\Socket', 'NetworkPort'))
      OR (side = 'front' AND itemtype <> 'NetworkPort')
      OR side NOT IN ('rear', 'front')
 `, 'count');

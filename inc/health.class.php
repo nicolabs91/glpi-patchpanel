@@ -149,10 +149,10 @@ final class PluginPatchpanelHealth
                 __('Invalid endpoint side or type', 'patchpanel'),
                 "SELECT COUNT(*) AS count
                  FROM glpi_plugin_patchpanel_portendpoints
-                 WHERE (side = 'rear' AND itemtype <> 'Glpi\\\\Socket')
+                 WHERE (side = 'rear' AND itemtype NOT IN ('Glpi\\\\Socket', 'NetworkPort'))
                     OR (side = 'front' AND itemtype <> 'NetworkPort')
                     OR side NOT IN ('rear', 'front')",
-                __('Rear endpoints must be GLPI sockets; front endpoints must be GLPI network ports.', 'patchpanel')
+                __('Rear endpoints must be GLPI sockets or network ports; front endpoints must be GLPI network ports.', 'patchpanel')
             ),
             self::countCheck(
                 __('Broken socket references', 'patchpanel'),

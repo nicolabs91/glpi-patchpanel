@@ -2,7 +2,7 @@
   "name": "glpi-patchpanel-tests",
   "private": true,
   "scripts": {
-    "test:e2e": "node tests/e2e/first_checkpoint.js && node tests/e2e/socket_endpoint_checkpoint.js && node tests/e2e/link_disconnect_checkpoint.js && node tests/e2e/second_checkpoint.js && node tests/e2e/route_explorer_checkpoint.js && node tests/e2e/csv_import_checkpoint.js && node tests/e2e/labels_checkpoint.js && node tests/e2e/audit_checkpoint.js && node tests/e2e/corrupt_data_checkpoint.js && node tests/e2e/route_consistency_checkpoint.js && node tests/e2e/database_model_checkpoint.js && node tests/e2e/health_checkpoint.js && node tests/e2e/accessibility_checkpoint.js",
+    "test:e2e": "node tests/e2e/first_checkpoint.js && node tests/e2e/remote_endpoint_checkpoint.js && node tests/e2e/socket_endpoint_checkpoint.js && node tests/e2e/link_disconnect_checkpoint.js && node tests/e2e/second_checkpoint.js && node tests/e2e/route_explorer_checkpoint.js && node tests/e2e/csv_import_checkpoint.js && node tests/e2e/labels_checkpoint.js && node tests/e2e/audit_checkpoint.js && node tests/e2e/corrupt_data_checkpoint.js && node tests/e2e/route_consistency_checkpoint.js && node tests/e2e/database_model_checkpoint.js && node tests/e2e/health_checkpoint.js && node tests/e2e/accessibility_checkpoint.js",
     "test:firefox": "BROWSER=firefox npm run test:e2e"
   },
   "devDependencies": {

@@ -102,7 +102,7 @@ async function uploadCsv(page, content, filename) {
     label: await page.locator('input[name="label"]').inputValue(),
     state: await page.locator('select[name="operational_state"]').inputValue(),
     media: await page.locator('select[name="media"]').inputValue(),
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
     route: await page.locator('.patchpanel-route').evaluate(element =>
       element.textContent.replace(/\s+/g, ' ').trim()
@@ -168,7 +168,7 @@ async function uploadCsv(page, content, filename) {
     label: await page.locator('input[name="label"]').inputValue(),
     state: await page.locator('select[name="operational_state"]').inputValue(),
     media: await page.locator('select[name="media"]').inputValue(),
-    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
+    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
 
@@ -232,7 +232,7 @@ async function uploadCsv(page, content, filename) {
     || result.imported.label !== 'CSV Port 01'
     || result.imported.state !== 'reserved'
     || result.imported.media !== 'fiber-mm'
-    || result.imported.rear !== '24'
+    || result.imported.rear !== 'Glpi\\Socket:24'
     || result.imported.front !== '225'
     || !result.imported.complete_route
     || !result.active_batch_blocks_panel_purge
