@@ -273,7 +273,10 @@ final class PluginPatchpanelCsvImport
             return;
         }
         $itemtype = $endpoint['itemtype'];
-        if (!in_array($itemtype, ['Glpi\\Socket', NetworkPort::class], true)) {
+        $expectedType = $endpoint['side'] === PluginPatchpanelPortEndpoint::REAR
+            ? 'Glpi\\Socket'
+            : NetworkPort::class;
+        if ($itemtype !== $expectedType) {
             $errors[] = __('The endpoint type is invalid.', 'patchpanel');
             return;
         }
@@ -425,7 +428,9 @@ final class PluginPatchpanelCsvImport
         $rear = $snapshot['endpoints'][PluginPatchpanelPortEndpoint::REAR];
         $front = $snapshot['endpoints'][PluginPatchpanelPortEndpoint::FRONT];
         return [
-            'rear_items_id' => $rear['items_id'],
+            'rear_items_id' => ($rear['itemtype'] ?? '') === 'Glpi\\Socket'
+                ? $rear['items_id']
+                : 0,
             'rear_cable_color' => $rear['cable_color'] ?? '',
             'front_items_id' => $front['items_id'],
             'front_cable_color' => $front['cable_color'] ?? '',

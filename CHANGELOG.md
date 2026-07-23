@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 - 2026-07-23
+
+- Restored the rear Remote endpoint selector to GLPI sockets only, matching the
+  behavior before 0.1.4; wall outlets remain available as sockets.
+- Removed the Inventory number field from patch-panel create and edit forms.
+- Prevented the optional rack-layout lookup from blocking GLPI while adding a
+  patch panel to a rack.
+- Kept legacy 0.1.4 device-port endpoints safe to disconnect or replace without
+  exposing them as selectable rear endpoints.
+- Removed hardcoded database credentials from the browser regression scripts.
+
 ## 0.1.4 - 2026-07-20
 
 - Replaced the wall-outlet-only remote endpoint field with one searchable,

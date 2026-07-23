@@ -11,7 +11,7 @@ function queryDb(sql) {
     'glpi-db',
     'mariadb',
     '-uglpi',
-    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
     'glpi',
     '-N',
     '-e',
@@ -139,7 +139,7 @@ async function selectValue(page, name, value, label) {
   queryDb(
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
   );
-  await selectValue(page, 'rear_endpoint', 'Glpi\\Socket:299', 'NLH-R0201-WA01 - Room 0201 wall outlet');
+  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
   await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
@@ -160,7 +160,7 @@ async function selectValue(page, name, value, label) {
     label: await page.locator('input[name="label"]').inputValue(),
     state: await page.locator('select[name="operational_state"]').inputValue(),
     media: await page.locator('select[name="media"]').inputValue(),
-    rear: await page.locator('select[name="rear_endpoint"]').inputValue(),
+    rear: await page.locator('select[name="rear_items_id"]').inputValue(),
     front: await page.locator('select[name="front_items_id"]').inputValue(),
   };
   const routeBody = await page.locator('body').innerText();
@@ -303,7 +303,7 @@ async function selectValue(page, name, value, label) {
     || result.port_result.label !== 'Rack A-03'
     || result.port_result.state !== 'reserved'
     || result.port_result.media !== 'fiber-mm'
-    || result.port_result.rear !== 'Glpi\\Socket:299'
+    || result.port_result.rear !== '299'
     || result.port_result.front !== '227'
     || !result.route_preserved
     || result.media_after_panel_rename !== 'fiber-mm'

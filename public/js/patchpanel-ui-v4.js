@@ -68,10 +68,24 @@
       return;
     }
 
-    const response = await fetch(
-      `${CFG_GLPI.root_doc}/plugins/patchpanel/front/panellayout.php?id=${panelId}&rack_id=${rackId}`,
-      { credentials: 'same-origin' }
-    );
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3000);
+    let response;
+    try {
+      response = await fetch(
+        `${CFG_GLPI.root_doc}/plugins/patchpanel/front/panellayout.php?id=${panelId}&rack_id=${rackId}`,
+        {
+          credentials: 'same-origin',
+          signal: controller.signal,
+        }
+      );
+    } catch (_error) {
+      // Rack placement is a convenience check. A failed or slow helper
+      // request must never prevent GLPI from submitting the rack item.
+      return;
+    } finally {
+      window.clearTimeout(timeout);
+    }
     if (!response.ok) {
       return;
     }
@@ -112,18 +126,9 @@
         }
       }
 
-      if (form.dataset.patchpanelRackBoundsBound !== '1') {
-        form.dataset.patchpanelRackBoundsBound = '1';
-        form.addEventListener('submit', async (event) => {
-          if (form.dataset.patchpanelRackBoundsSubmitting === '1') {
-            return;
-          }
-          event.preventDefault();
-          await keepPatchPanelInsideRack(form);
-          form.dataset.patchpanelRackBoundsSubmitting = '1';
-          form.requestSubmit(event.submitter || undefined);
-        });
-      }
+      // Never intercept GLPI's rack form submission here. The layout lookup
+      // is only a progressive enhancement after item selection; GLPI remains
+      // responsible for submitting and validating the rack relation.
     });
   }
 

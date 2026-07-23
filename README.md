@@ -12,8 +12,7 @@ switch/router port belong together.
 
 ## Current features
 
-- Create patch panels with a port count, row layout, media type, location and
-  inventory number.
+- Create patch panels with a port count, row layout, media type and location.
 - Define reusable panel models so new panels can inherit their port count, rows
   and media type.
 - View a visual patch-panel grid with free, partially connected and connected
@@ -42,7 +41,7 @@ Administrative tools are available from the plugin settings page:
 
 ## Compatibility
 
-PatchPanel `0.1.4` targets GLPI 11 and PHP 8.2 or newer.
+PatchPanel `0.2.0` targets GLPI 11 and PHP 8.2 or newer.
 
 ## Installation and upgrade
 

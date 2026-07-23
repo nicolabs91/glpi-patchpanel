@@ -4,6 +4,7 @@ const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
 const rackId = Number(process.env.GLPI_RACK_ID || 1);
+const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
 
 (async () => {
   const browser = await launchBrowser();
@@ -57,8 +58,16 @@ const rackId = Number(process.env.GLPI_RACK_ID || 1);
   await page.locator('select[name="position"]').waitFor();
   await page.waitForFunction(() => document.querySelector('select[name="position"]')?.value === '41');
   const correctedRackPosition = await page.locator('select[name="position"]').inputValue();
+  if (stallRackLayout) {
+    await page.route('**/plugins/patchpanel/front/panellayout.php?**', async (route) => {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      await route.continue();
+    });
+  }
+  const rackSubmitStartedAt = Date.now();
   await page.locator('button[name="add"], input[name="add"]').last().click();
   await page.waitForLoadState('networkidle');
+  const rackSubmitDurationMs = Date.now() - rackSubmitStartedAt;
   const rackPlacementSucceeded = !(await page.locator('body').innerText())
     .includes('Item is out of rack bounds');
 
@@ -118,6 +127,9 @@ const rackId = Number(process.env.GLPI_RACK_ID || 1);
     rack_item_visible: rackItemVisible,
     corrected_rack_position: correctedRackPosition,
     rack_placement_succeeded: rackPlacementSucceeded,
+    stalled_layout_did_not_block_submit:
+      !stallRackLayout || rackSubmitDurationMs < 5000,
+    rack_submit_duration_ms: rackSubmitDurationMs,
     label_count: labelCount,
     qr_is_png_data_uri: firstQr?.startsWith('data:image/png;base64,') || false,
     first_label_has_panel_and_port:
@@ -141,6 +153,7 @@ const rackId = Number(process.env.GLPI_RACK_ID || 1);
     || !result.rack_item_visible
     || result.corrected_rack_position !== '41'
     || !result.rack_placement_succeeded
+    || !result.stalled_layout_did_not_block_submit
     || result.label_count !== 48
     || !result.qr_is_png_data_uri
     || !result.first_label_has_panel_and_port

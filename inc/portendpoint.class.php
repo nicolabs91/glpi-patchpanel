@@ -40,7 +40,11 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
             __('Rear side: permanent cabling', 'patchpanel') . '</th></tr>';
         echo "<tr class='tab_bg_1'><td>" . __('Remote endpoint / connection point', 'patchpanel') . "</td><td>";
-        self::showRemoteEndpointDropdown($portId, $rear);
+        Dropdown::show('Glpi\\Socket', [
+            'name' => 'rear_items_id',
+            'value' => $rear['items_id'] ?? 0,
+            'condition' => self::getAvailableCondition('Glpi\\Socket', (int) ($rear['items_id'] ?? 0)),
+        ]);
         echo '</td><td colspan="2"></td></tr>';
 
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
@@ -55,68 +59,6 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         self::showColorDropdown('front_cable_color', $front['cable_color'] ?? '');
         echo '</td></tr>';
 
-    }
-
-    private static function showRemoteEndpointDropdown(int $portId, array $current): void
-    {
-        global $DB;
-
-        $selected = !empty($current['items_id'])
-            ? (string) $current['itemtype'] . ':' . (int) $current['items_id']
-            : '';
-        $used = [];
-        foreach ($DB->request([
-            'SELECT' => ['itemtype', 'items_id'],
-            'FROM' => self::getTable(),
-            'WHERE' => empty($current['id']) ? [] : ['NOT' => ['id' => (int) $current['id']]],
-        ]) as $endpoint) {
-            $used[(string) $endpoint['itemtype'] . ':' . (int) $endpoint['items_id']] = true;
-        }
-
-        $wallOutletLabel = __('Wall outlets', 'patchpanel');
-        $devicePortLabel = __('Device ports', 'patchpanel');
-        $groups = [$wallOutletLabel => [], $devicePortLabel => []];
-        foreach ($DB->request(['FROM' => \Glpi\Socket::getTable(), 'ORDER' => ['name ASC']]) as $row) {
-            $key = \Glpi\Socket::class . ':' . (int) $row['id'];
-            if (isset($used[$key]) && $key !== $selected) {
-                continue;
-            }
-            $socket = new \Glpi\Socket();
-            if ($socket->getFromDB((int) $row['id']) && $socket->canViewItem()) {
-                $groups[$wallOutletLabel][$key] = $socket->getName();
-            }
-        }
-        foreach ($DB->request([
-            'FROM' => NetworkPort::getTable(),
-            'WHERE' => ['is_deleted' => 0, 'NOT' => ['itemtype' => PluginPatchpanelPanelPort::class]],
-            'ORDER' => ['itemtype ASC', 'items_id ASC', 'name ASC'],
-        ]) as $row) {
-            $key = NetworkPort::class . ':' . (int) $row['id'];
-            if (isset($used[$key]) && $key !== $selected) {
-                continue;
-            }
-            $port = new NetworkPort();
-            if (!$port->getFromDB((int) $row['id']) || !$port->canViewItem()) {
-                continue;
-            }
-            $ownerType = (string) ($row['itemtype'] ?? '');
-            $ownerName = $ownerType;
-            if (class_exists($ownerType) && is_a($ownerType, CommonDBTM::class, true)) {
-                $owner = new $ownerType();
-                if (!$owner->getFromDB((int) ($row['items_id'] ?? 0)) || !$owner->canViewItem()) {
-                    continue;
-                }
-                $ownerName = $owner->getName();
-            }
-            $portName = trim((string) ($row['name'] ?? ''))
-                ?: sprintf(__('Port %d', 'patchpanel'), (int) $row['id']);
-            $groups[$devicePortLabel][$key] = $ownerName . ' · ' . $portName;
-        }
-
-        Dropdown::showFromArray('rear_endpoint', $groups, [
-            'value' => $selected,
-            'display_emptychoice' => true,
-        ]);
     }
 
     private static function showColorDropdown(string $name, string $value): void
@@ -166,10 +108,6 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         $existingEndpoints = self::getForPort($portId);
         $existingRear = $existingEndpoints[self::REAR] ?? [];
         $existingFront = $existingEndpoints[self::FRONT] ?? [];
-        $rearSelection = self::parseRemoteEndpoint((string) ($input['rear_endpoint'] ?? ''));
-        if ($rearSelection['items_id'] <= 0 && !empty($input['rear_items_id'])) {
-            $rearSelection = ['itemtype' => \Glpi\Socket::class, 'items_id' => (int) $input['rear_items_id']];
-        }
         $oldLink = [
             'rear_port' => self::getRearNetworkPortId($existingRear),
             'front_port' => (int) ($existingFront['items_id'] ?? 0),
@@ -178,8 +116,8 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
         $desired = [
             self::REAR => [
-                'itemtype' => $rearSelection['itemtype'],
-                'items_id' => $rearSelection['items_id'],
+                'itemtype' => 'Glpi\\Socket',
+                'items_id' => (int) ($input['rear_items_id'] ?? 0),
                 'cable_color' => null,
                 'cables_id' => 0,
                 'cable_label' => null,
@@ -226,14 +164,6 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             );
             return false;
         }
-    }
-
-    private static function parseRemoteEndpoint(string $value): array
-    {
-        if (!preg_match('/^(Glpi\\\\Socket|NetworkPort):(\\d+)$/', $value, $matches)) {
-            return ['itemtype' => \Glpi\Socket::class, 'items_id' => 0];
-        }
-        return ['itemtype' => $matches[1], 'items_id' => (int) $matches[2]];
     }
 
     public static function disconnectSide(int $portId, string $side): bool
@@ -575,6 +505,11 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         return (int) ($socket->fields['networkports_id'] ?? 0);
     }
 
+    /**
+     * Resolve both current socket endpoints and legacy 0.1.4 device-port
+     * endpoints so an old native link can be removed safely. New rear
+     * endpoints are still restricted to sockets by validation.
+     */
     private static function getRearNetworkPortId(array $endpoint): int
     {
         if (($endpoint['itemtype'] ?? '') === NetworkPort::class) {
@@ -939,10 +874,8 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
     {
         global $DB;
 
-        $allowedTypes = $side === self::REAR
-            ? [\Glpi\Socket::class, NetworkPort::class]
-            : [NetworkPort::class];
-        if (!in_array($itemtype, $allowedTypes, true)) {
+        $expectedType = $side === self::REAR ? \Glpi\Socket::class : NetworkPort::class;
+        if ($itemtype !== $expectedType) {
             throw new InvalidArgumentException(__('Invalid endpoint type.', 'patchpanel'));
         }
 
@@ -955,18 +888,16 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         }
 
         $used = $DB->request([
-            'SELECT' => ['plugin_patchpanel_panelports_id', 'side'],
+            'SELECT' => ['plugin_patchpanel_panelports_id'],
             'FROM' => self::getTable(),
             'WHERE' => [
                 'itemtype' => $itemtype,
                 'items_id' => $itemsId,
+                'NOT' => ['plugin_patchpanel_panelports_id' => $portId],
             ],
             'LIMIT' => 1,
         ])->current();
-        if ($used && (
-            (int) $used['plugin_patchpanel_panelports_id'] !== $portId
-            || (string) $used['side'] !== $side
-        )) {
+        if ($used) {
             throw new InvalidArgumentException(__('The selected endpoint is already assigned to another panel port.', 'patchpanel'));
         }
     }

@@ -18,7 +18,7 @@ function queryDb(sql) {
     'glpi-db',
     'mariadb',
     '-uglpi',
-    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
     'glpi',
     '-N',
     '-e',

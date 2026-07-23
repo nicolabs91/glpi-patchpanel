@@ -4,7 +4,7 @@ const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
 const panelPortId = Number(process.env.GLPI_PANEL_PORT_ID || 31);
-const otherPanelPortId = Number(process.env.GLPI_OTHER_PANEL_PORT_ID || 32);
+const panelId = Number(process.env.GLPI_PANEL_ID || 8);
 
 (async () => {
   const browser = await launchBrowser();
@@ -24,53 +24,45 @@ const otherPanelPortId = Number(process.env.GLPI_OTHER_PANEL_PORT_ID || 32);
   await page.click('button[type="submit"], input[type="submit"]');
   await page.waitForLoadState('networkidle');
 
-  const formUrl = `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${panelPortId}`;
-  await page.goto(formUrl, { waitUntil: 'networkidle' });
-  const selector = page.locator('select[name="rear_endpoint"]');
-  const groups = await selector.locator('optgroup').evaluateAll(nodes =>
-    nodes.map(node => ({ label: node.label, count: node.children.length }))
-  );
-  const deviceOption = selector.locator('optgroup[label="Device ports"] option').first();
-  const deviceValue = await deviceOption.getAttribute('value');
-  const deviceLabel = (await deviceOption.innerText()).trim();
-  if (!deviceValue) throw new Error('No available device network port found');
-
-  await selector.selectOption(deviceValue);
-  await page.locator('button[name="update"], input[name="update"]').click();
-  await page.waitForLoadState('networkidle');
-  const persisted = await page.locator('select[name="rear_endpoint"]').inputValue();
-  const routeShowsDevice = (await page.locator('body').innerText()).includes(deviceLabel.split(' · ')[0]);
-
   await page.goto(
-    `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${otherPanelPortId}`,
+    `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${panelPortId}`,
     { waitUntil: 'networkidle' },
   );
-  const reusedVisible = await page.locator(
-    `select[name="rear_endpoint"] option[value="${deviceValue}"]`
-  ).count();
+  const socketSelector = page.locator('select[name="rear_items_id"]');
+  const socketSelectorCount = await socketSelector.count();
+  const mixedSelectorCount = await page.locator('select[name="rear_endpoint"]').count();
+  await socketSelector.locator('xpath=following-sibling::span[contains(@class,"select2")]').click();
+  await page.locator('.select2-search__field').last().fill('HTL-L1');
+  await page.waitForTimeout(750);
+  const socketOptions = await page.locator('.select2-results__option').count();
+  await page.keyboard.press('Escape');
 
-  await page.goto(formUrl, { waitUntil: 'networkidle' });
-  await page.locator('select[name="rear_endpoint"]').selectOption('0');
-  await page.locator('button[name="update"], input[name="update"]').click();
-  await page.waitForLoadState('networkidle');
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
+    waitUntil: 'networkidle',
+  });
+  const createInventoryFieldCount = await page.locator('input[name="otherserial"]').count();
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
+    waitUntil: 'networkidle',
+  });
+  const editInventoryFieldCount = await page.locator('input[name="otherserial"]').count();
 
   const result = {
-    groups,
-    selected_device: { value: deviceValue, label: deviceLabel },
-    persisted,
-    route_shows_device: routeShowsDevice,
-    reused_visible_elsewhere: reusedVisible,
+    socket_selector_visible: socketSelectorCount,
+    socket_options: socketOptions,
+    mixed_remote_selector_visible: mixedSelectorCount,
+    create_inventory_field_visible: createInventoryFieldCount,
+    edit_inventory_field_visible: editInventoryFieldCount,
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
   await browser.close();
 
   if (
-    !groups.some(group => group.label === 'Wall outlets' && group.count > 0)
-    || !groups.some(group => group.label === 'Device ports' && group.count > 0)
-    || persisted !== deviceValue
-    || !routeShowsDevice
-    || reusedVisible !== 0
+    result.socket_selector_visible !== 1
+    || result.socket_options < 1
+    || result.mixed_remote_selector_visible !== 0
+    || result.create_inventory_field_visible !== 0
+    || result.edit_inventory_field_visible !== 0
     || errors.length
   ) {
     process.exitCode = 1;

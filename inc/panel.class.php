@@ -310,10 +310,6 @@ class PluginPatchpanelPanel extends CommonDBTM
         ]);
         echo '</td></tr>';
 
-        echo "<tr class='tab_bg_1'><td>" . __('Inventory number') . '</td><td colspan="3">';
-        echo Html::input('otherserial', ['value' => $this->fields['otherserial'] ?? '']);
-        echo '</td></tr>';
-
         echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . "</td><td colspan='3'>";
         Html::textarea([
             'name' => 'comment',

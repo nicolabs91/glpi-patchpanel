@@ -6,7 +6,7 @@ function queryRows(sql) {
     'glpi-db',
     'mariadb',
     '-uglpi',
-    '-pQ7f2mK9xT8pL4vN6dR1sW3yZ',
+    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
     'glpi',
     '--batch',
     '--raw',
@@ -104,7 +104,7 @@ const duplicateEndpoints = scalar(`
 const invalidEndpointTypes = scalar(`
   SELECT COUNT(*) AS count
   FROM glpi_plugin_patchpanel_portendpoints
-  WHERE (side = 'rear' AND itemtype NOT IN ('Glpi\\\\Socket', 'NetworkPort'))
+  WHERE (side = 'rear' AND itemtype <> 'Glpi\\\\Socket')
      OR (side = 'front' AND itemtype <> 'NetworkPort')
      OR side NOT IN ('rear', 'front')
 `, 'count');

@@ -83,20 +83,6 @@ final class PluginPatchpanelRoute extends CommonGLPI
     private static function terminalFromRearEndpoint(array $endpoints): ?array
     {
         $rear = $endpoints[PluginPatchpanelPortEndpoint::REAR] ?? null;
-        if (($rear['itemtype'] ?? '') === NetworkPort::class) {
-            $networkPort = new NetworkPort();
-            if (
-                $networkPort->getFromDB((int) ($rear['items_id'] ?? 0))
-                && (int) ($networkPort->fields['is_deleted'] ?? 0) === 0
-            ) {
-                $terminal = self::stepForOwner($networkPort);
-                if ($terminal !== null) {
-                    $terminal['port'] = self::stepForItem($networkPort);
-                    return $terminal;
-                }
-            }
-            return null;
-        }
         if (($rear['itemtype'] ?? '') !== \Glpi\Socket::class) {
             return null;
         }
