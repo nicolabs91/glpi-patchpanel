@@ -185,7 +185,8 @@ and README.
 
 CSV preview and apply must reject a rear-socket change for a linked port.
 Rollback must also respect the same centralized validation and cannot restore
-a conflicting socket behind an active link. A later version can add peer and
+a conflicting socket behind an active link, even when the imported port fields
+themselves have not changed since the import. A later version can add peer and
 cable metadata columns without changing the canonical model.
 
 ## Performance boundaries

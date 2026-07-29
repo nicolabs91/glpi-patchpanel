@@ -465,12 +465,17 @@ final class PluginPatchpanelCsvImport
         ]));
 
         foreach ($changes as $change) {
+            $portId = (int) $change['plugin_patchpanel_panelports_id'];
             $expected = json_decode($change['after_json'], true, 512, JSON_THROW_ON_ERROR);
-            if (self::snapshot((int) $change['plugin_patchpanel_panelports_id']) !== $expected) {
+            if (self::snapshot($portId) !== $expected) {
                 throw new DomainException(
                     __('Rollback stopped because an imported port was changed after the import.', 'patchpanel')
                 );
             }
+            self::assertRollbackAllowed(
+                $portId,
+                json_decode($change['before_json'], true, 512, JSON_THROW_ON_ERROR)
+            );
         }
 
         $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
@@ -525,6 +530,21 @@ final class PluginPatchpanelCsvImport
         } catch (Throwable $e) {
             $DB->rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Reject rollback snapshots that would restore a rear socket behind an
+     * active symmetric panel-to-panel link.
+     */
+    public static function assertRollbackAllowed(int $portId, array $snapshot): void
+    {
+        $rear = $snapshot['endpoints'][PluginPatchpanelPortEndpoint::REAR] ?? [];
+        if (
+            ($rear['itemtype'] ?? '') === \Glpi\Socket::class
+            && (int) ($rear['items_id'] ?? 0) > 0
+        ) {
+            PluginPatchpanelPanelPortLink::assertRearSocketAllowed($portId);
         }
     }
 
