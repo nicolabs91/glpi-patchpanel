@@ -79,38 +79,6 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             ]
         );
         echo '</td></tr>';
-        echo "<tr class='tab_bg_1'><td>" . __('Cable label', 'patchpanel') . '</td><td>';
-        echo Html::input('panel_link_cable_label', [
-            'value' => (string) ($panelLink['cable_label'] ?? ''),
-        ]);
-        echo '</td><td>' . __('Cable color', 'patchpanel') . '</td><td>';
-        self::showColorDropdown(
-            'panel_link_cable_color',
-            (string) ($panelLink['cable_color'] ?? '')
-        );
-        echo '</td></tr>';
-        echo "<tr class='tab_bg_1'><td>" . __('Link media', 'patchpanel') . '</td><td>';
-        Dropdown::showFromArray(
-            'panel_link_media_type',
-            PluginPatchpanelPanelPort::getMediaOptions(),
-            ['value' => (string) ($panelLink['media_type'] ?? 'fiber')]
-        );
-        echo '</td><td>' . __('Length', 'patchpanel') . '</td><td>';
-        echo Html::input('panel_link_length', [
-            'value' => (string) ($panelLink['length'] ?? ''),
-            'type' => 'number',
-            'min' => 0,
-            'step' => '0.01',
-        ]);
-        echo '</td></tr>';
-        echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . '</td><td colspan="3">';
-        Html::textarea([
-            'name' => 'panel_link_comment',
-            'value' => (string) ($panelLink['comment'] ?? ''),
-            'rows' => 3,
-        ]);
-        echo '</td></tr>';
-
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
             __('Front side: patch cable', 'patchpanel') . '</th></tr>';
         echo "<tr class='tab_bg_1'><td>" . __('Switch / router port', 'patchpanel') . "</td><td>";

@@ -134,15 +134,15 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
         }
 
         [$portIdA, $portIdB] = self::normalizePair($portId, $peerPortId);
-        $length = trim((string) ($input['panel_link_length'] ?? ''));
+        $length = trim((string) ($input['panel_link_length'] ?? ($existing['length'] ?? '')));
         if ($length !== '' && (!is_numeric($length) || (float) $length < 0)) {
             throw new InvalidArgumentException(__('The cable length must be zero or greater.', 'patchpanel'));
         }
-        $color = trim((string) ($input['panel_link_cable_color'] ?? ''));
+        $color = trim((string) ($input['panel_link_cable_color'] ?? ($existing['cable_color'] ?? '')));
         if ($color !== '' && !preg_match('/^#[0-9a-f]{6}$/i', $color)) {
             throw new InvalidArgumentException(__('The cable color is invalid.', 'patchpanel'));
         }
-        $media = (string) ($input['panel_link_media_type'] ?? 'fiber');
+        $media = (string) ($input['panel_link_media_type'] ?? ($existing['media_type'] ?? 'fiber'));
         if (!array_key_exists($media, PluginPatchpanelPanelPort::getMediaOptions())) {
             throw new InvalidArgumentException(__('The link media type is invalid.', 'patchpanel'));
         }
@@ -151,11 +151,15 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
         $fields = [
             'panelports_id_a' => $portIdA,
             'panelports_id_b' => $portIdB,
-            'cable_label' => trim((string) ($input['panel_link_cable_label'] ?? '')) ?: null,
+            'cable_label' => trim((string) (
+                $input['panel_link_cable_label'] ?? ($existing['cable_label'] ?? '')
+            )) ?: null,
             'media_type' => $media,
             'cable_color' => $color !== '' ? strtolower($color) : null,
             'length' => $length !== '' ? (float) $length : null,
-            'comment' => trim((string) ($input['panel_link_comment'] ?? '')) ?: null,
+            'comment' => trim((string) (
+                $input['panel_link_comment'] ?? ($existing['comment'] ?? '')
+            )) ?: null,
             'is_active' => 1,
             'date_mod' => $now,
         ];

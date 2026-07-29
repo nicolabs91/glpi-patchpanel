@@ -54,7 +54,7 @@ const panelPortId = Number(process.env.GLPI_PANEL_PORT_ID || 31);
   if (
     rearTypes.join(',') !== 'none,socket,panel_port'
     || peerOptions < 2
-    || metadataFields !== 5
+    || metadataFields !== 0
     || selectedPeerIsSelf !== 0
     || errors.length
   ) {
