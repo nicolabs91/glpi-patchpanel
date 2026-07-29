@@ -63,4 +63,49 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
         }
         return 0;
     }
+
+    public static function hasActiveLink(int $portId): bool
+    {
+        return self::getForPanelPort($portId) !== null;
+    }
+
+    public static function assertRearSocketAllowed(int $portId): void
+    {
+        if (self::hasActiveLink($portId)) {
+            throw new DomainException(
+                __('This panel port is already permanently linked to another patch panel.', 'patchpanel')
+            );
+        }
+    }
+
+    public static function assertPanelLinkAllowed(int $portId): void
+    {
+        global $DB;
+
+        if ($portId <= 0) {
+            throw new InvalidArgumentException(__('The panel port is invalid.', 'patchpanel'));
+        }
+        if (self::hasActiveLink($portId)) {
+            throw new DomainException(
+                __('This panel port is already permanently linked to another patch panel.', 'patchpanel')
+            );
+        }
+
+        $rearEndpoint = $DB->request([
+            'SELECT' => ['id'],
+            'FROM' => PluginPatchpanelPortEndpoint::getTable(),
+            'WHERE' => [
+                'plugin_patchpanel_panelports_id' => $portId,
+                'side' => PluginPatchpanelPortEndpoint::REAR,
+                'itemtype' => \Glpi\Socket::class,
+                'NOT' => ['items_id' => 0],
+            ],
+            'LIMIT' => 1,
+        ])->current();
+        if ($rearEndpoint) {
+            throw new DomainException(
+                __('This panel port already has a rear GLPI connection point.', 'patchpanel')
+            );
+        }
+    }
 }

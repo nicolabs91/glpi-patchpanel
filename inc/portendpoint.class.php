@@ -874,9 +874,14 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
     {
         global $DB;
 
-        $expectedType = $side === self::REAR ? \Glpi\Socket::class : NetworkPort::class;
-        if ($itemtype !== $expectedType) {
+        $expectedTypes = $side === self::REAR
+            ? [\Glpi\Socket::class]
+            : [NetworkPort::class];
+        if (!in_array($itemtype, $expectedTypes, true)) {
             throw new InvalidArgumentException(__('Invalid endpoint type.', 'patchpanel'));
+        }
+        if ($side === self::REAR) {
+            PluginPatchpanelPanelPortLink::assertRearSocketAllowed($portId);
         }
 
         $item = new $itemtype();

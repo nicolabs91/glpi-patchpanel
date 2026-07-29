@@ -280,6 +280,14 @@ final class PluginPatchpanelCsvImport
             $errors[] = __('The endpoint type is invalid.', 'patchpanel');
             return;
         }
+        if ($endpoint['side'] === PluginPatchpanelPortEndpoint::REAR) {
+            try {
+                PluginPatchpanelPanelPortLink::assertRearSocketAllowed($portId);
+            } catch (DomainException $e) {
+                $errors[] = $e->getMessage();
+                return;
+            }
+        }
         $item = new $itemtype();
         if (!$item->getFromDB((int) $endpoint['items_id']) || !$item->canViewItem()) {
             $errors[] = sprintf(__('The %s endpoint does not exist or is inaccessible.', 'patchpanel'), $endpoint['side']);
