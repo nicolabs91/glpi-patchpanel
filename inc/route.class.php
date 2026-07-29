@@ -22,6 +22,9 @@ final class PluginPatchpanelRoute extends CommonGLPI
             'panel' => null,
             'rear' => null,
             'front' => null,
+            'panel_link' => null,
+            'peer_panel' => null,
+            'peer_port' => null,
             'terminal' => null,
             'upstream' => [],
             'has_broken_reference' => false,
@@ -40,6 +43,45 @@ final class PluginPatchpanelRoute extends CommonGLPI
         }
 
         $endpoints = PluginPatchpanelPortEndpoint::getForPort($portId);
+        $panelLink = PluginPatchpanelPanelPortLink::getForPanelPort($portId);
+        if ($panelLink) {
+            $link = new PluginPatchpanelPanelPortLink();
+            $peerPort = new PluginPatchpanelPanelPort();
+            $peerPanel = new PluginPatchpanelPanel();
+            $peerPortId = PluginPatchpanelPanelPortLink::getPeerPanelPortId($panelLink, $portId);
+
+            if ($link->getFromDB((int) $panelLink['id'])) {
+                $linkLabel = trim((string) ($panelLink['cable_label'] ?? ''));
+                $result['panel_link'] = self::stepForItem(
+                    $link,
+                    $linkLabel !== '' ? $linkLabel : __('Panel-to-panel link', 'patchpanel')
+                );
+            } else {
+                $result['panel_link'] = self::brokenStep(
+                    PluginPatchpanelPanelPortLink::class,
+                    (int) ($panelLink['id'] ?? 0)
+                );
+                $result['has_broken_reference'] = true;
+            }
+
+            if ($peerPortId > 0 && $peerPort->getFromDB($peerPortId)) {
+                $result['peer_port'] = self::stepForItem(
+                    $peerPort,
+                    $peerPort->fields['label'] ?: 'Port ' . $peerPort->fields['number']
+                );
+                if ($peerPanel->getFromDB((int) $peerPort->fields['plugin_patchpanel_panels_id'])) {
+                    $result['peer_panel'] = self::stepForItem($peerPanel);
+                } else {
+                    $result['has_broken_reference'] = true;
+                }
+            } else {
+                $result['peer_port'] = self::brokenStep(
+                    PluginPatchpanelPanelPort::class,
+                    $peerPortId
+                );
+                $result['has_broken_reference'] = true;
+            }
+        }
         foreach ([PluginPatchpanelPortEndpoint::REAR, PluginPatchpanelPortEndpoint::FRONT] as $side) {
             if (!isset($endpoints[$side])) {
                 continue;
@@ -412,6 +454,15 @@ final class PluginPatchpanelRoute extends CommonGLPI
         }
         if ($route['port']) {
             $steps[] = self::withZone($route['port'], 'panel');
+        }
+        if ($route['panel_link'] ?? null) {
+            $steps[] = self::withZone($route['panel_link'], 'connection');
+        }
+        if ($route['peer_panel'] ?? null) {
+            $steps[] = self::withZone($route['peer_panel'], 'panel');
+        }
+        if ($route['peer_port'] ?? null) {
+            $steps[] = self::withZone($route['peer_port'], 'panel');
         }
         if ($route['front']) {
             $front = self::stepForNetworkPortWithOwner($route['front']);
