@@ -50,11 +50,12 @@ Fields used by the first implementation:
 - `date_creation`
 - `date_mod`
 
-The first implementation uses the metadata in the UI, route explorer, audit
-snapshots and search. `media_type` uses the same normalized options as panel
-ports. `cable_color` is either empty or a normalized six-digit hex color.
-`length` is optional and non-negative. An entity column is deliberately not
-duplicated: entity visibility is derived from both linked parent panels.
+The canonical model retains optional cable metadata for compatibility,
+migration, audit snapshots and future integrations. The normal rear-side form
+does not expose these fields: its only additional control is the linked
+patch-panel port. A compact-form save preserves existing metadata rather than
+clearing it. An entity column is deliberately not duplicated: entity
+visibility is derived from both linked parent panels.
 
 Endpoint IDs are always normalized:
 
@@ -108,15 +109,10 @@ The rear-side selector has three explicit states:
 - `GLPI connection point`
 - `Another patch panel`
 
-For another patch panel, the form presents:
-
-- target patch panel;
-- available target port;
-- cable label;
-- cable color;
-- media type;
-- length;
-- comment.
+For another patch panel, the form presents one additional searchable field:
+the available target patch-panel port. Its option label includes the parent
+panel, so a separate panel field is unnecessary. Cable label, cable color,
+media type, length and comment are deliberately absent from this workflow.
 
 Only visible, non-deleted panels and valid candidate ports are selectable.
 Occupied ports are not accepted server-side even if a request is manipulated.
@@ -187,7 +183,8 @@ CSV preview and apply must reject a rear-socket change for a linked port.
 Rollback must also respect the same centralized validation and cannot restore
 a conflicting socket behind an active link, even when the imported port fields
 themselves have not changed since the import. A later version can add peer and
-cable metadata columns without changing the canonical model.
+link columns without changing the canonical model; this must not implicitly
+expand the compact rear-side UI.
 
 The rollback-safe lifecycle checkpoint covers creation, lookup from both
 endpoints, peer reassignment, release of the old peer and deletion. It also

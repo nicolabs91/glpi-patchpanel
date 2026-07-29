@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added a dedicated symmetric model for permanent links between patch-panel
+  ports, including validation, migration, route traversal, audit, health,
+  cleanup and rollback-safe lifecycle coverage.
+- Kept the rear-side editor compact: selecting another patch panel adds only
+  the linked-port field. Length, cable color, cable label, media type and link
+  comments are deliberately not exposed there.
+
 ## 0.2.0 - 2026-07-23
 
 - Restored the rear Remote endpoint selector to GLPI sockets only, matching the

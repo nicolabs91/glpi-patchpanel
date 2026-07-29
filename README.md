@@ -20,6 +20,9 @@ switch/router port belong together.
 - Edit each panel port with a name/label, operational state, media type, rear
   connection point, front network port and patch cable color. The port name is
   also the cable label; there is no separate cable ID label.
+- Link the rear side directly to one available port on another patch panel.
+  This compact workflow adds only the linked-port selector; link length,
+  cable color, cable label, media type and comments are not form controls.
 - Follow the physical route from endpoint device to connection point, panel
   port, access switch and, when discoverable through GLPI network links, upstream
   core or gateway equipment.
