@@ -1,11 +1,59 @@
 const { launchBrowser } = require('./helpers');
+const { execFileSync } = require('child_process');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-const panelPortId = Number(process.env.GLPI_PANEL_PORT_ID || 31);
+
+function queryDb(sql) {
+  return execFileSync('docker', [
+    'exec',
+    'glpi-db',
+    'mariadb',
+    '-uglpi',
+    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
+    'glpi',
+    '-N',
+    '-e',
+    sql,
+  ], { encoding: 'utf8' }).trim();
+}
+
+function findFreePanelPortId() {
+  const explicitId = Number(process.env.GLPI_PANEL_PORT_ID || 0);
+  if (explicitId > 0) {
+    return explicitId;
+  }
+
+  const discoveredId = Number(queryDb(`
+    SELECT pp.id
+    FROM glpi_plugin_patchpanel_panelports pp
+    INNER JOIN glpi_plugin_patchpanel_panels p
+      ON p.id = pp.plugin_patchpanel_panels_id
+    LEFT JOIN glpi_plugin_patchpanel_portendpoints pe
+      ON pe.plugin_patchpanel_panelports_id = pp.id
+      AND pe.side = 'rear'
+    LEFT JOIN glpi_plugin_patchpanel_panelportlinks pla
+      ON pla.panelports_id_a = pp.id
+      AND pla.is_active = 1
+    LEFT JOIN glpi_plugin_patchpanel_panelportlinks plb
+      ON plb.panelports_id_b = pp.id
+      AND plb.is_active = 1
+    WHERE p.is_deleted = 0
+      AND pe.id IS NULL
+      AND pla.id IS NULL
+      AND plb.id IS NULL
+    ORDER BY pp.id
+    LIMIT 1
+  `));
+  if (!discoveredId) {
+    throw new Error('No free panel port is available for the panel-link UI checkpoint');
+  }
+  return discoveredId;
+}
 
 (async () => {
+  const panelPortId = findFreePanelPortId();
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];
@@ -42,6 +90,7 @@ const panelPortId = Number(process.env.GLPI_PANEL_PORT_ID || 31);
   ).count();
 
   const result = {
+    panel_port_id: panelPortId,
     rear_connection_types: rearTypes,
     selectable_peer_options: peerOptions,
     metadata_fields: metadataFields,
