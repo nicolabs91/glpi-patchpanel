@@ -7,6 +7,10 @@ final class PluginPatchpanelHealth
         ['glpi_plugin_patchpanel_portendpoints', 'endpoint', ['itemtype', 'items_id']],
         ['glpi_plugin_patchpanel_panelports', 'panel_number', ['plugin_patchpanel_panels_id', 'number']],
         ['glpi_plugin_patchpanel_panelports', 'panel_layout', ['plugin_patchpanel_panels_id', 'row', 'position']],
+        ['glpi_plugin_patchpanel_panelportlinks', 'link_pair', ['panelports_id_a', 'panelports_id_b']],
+        ['glpi_plugin_patchpanel_panelportlinks', 'panelports_id_a', ['panelports_id_a']],
+        ['glpi_plugin_patchpanel_panelportlinks', 'panelports_id_b', ['panelports_id_b']],
+        ['glpi_plugin_patchpanel_panelportlinks', 'is_active', ['is_active']],
         ['glpi_networkports', 'item', ['itemtype', 'items_id']],
         ['glpi_sockets', 'item', ['itemtype', 'items_id']],
         ['glpi_sockets', 'networkports_id', ['networkports_id']],
@@ -111,6 +115,53 @@ final class PluginPatchpanelHealth
                    ON pa.id = p.plugin_patchpanel_panels_id
                  WHERE pa.id IS NULL",
                 __('Remove orphan panel ports or restore the parent panel.', 'patchpanel')
+            ),
+            self::countCheck(
+                __('Panel links with a missing port', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_panelportlinks l
+                 LEFT JOIN glpi_plugin_patchpanel_panelports a ON a.id = l.panelports_id_a
+                 LEFT JOIN glpi_plugin_patchpanel_panelports b ON b.id = l.panelports_id_b
+                 WHERE a.id IS NULL OR b.id IS NULL",
+                __('Remove the orphan panel link or restore both linked panel ports.', 'patchpanel')
+            ),
+            self::countCheck(
+                __('Self-linked or non-normalized panel links', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_panelportlinks
+                 WHERE panelports_id_a >= panelports_id_b",
+                __('Recreate the link with two different ports in canonical endpoint order.', 'patchpanel')
+            ),
+            self::countCheck(
+                __('Panel ports used by multiple active links', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM (
+                   SELECT panelport_id
+                   FROM (
+                     SELECT panelports_id_a AS panelport_id
+                     FROM glpi_plugin_patchpanel_panelportlinks
+                     WHERE is_active = 1
+                     UNION ALL
+                     SELECT panelports_id_b AS panelport_id
+                     FROM glpi_plugin_patchpanel_panelportlinks
+                     WHERE is_active = 1
+                   ) endpoints
+                   GROUP BY panelport_id
+                   HAVING COUNT(*) > 1
+                 ) duplicate_endpoints",
+                __('Keep at most one active panel-to-panel link for each panel port.', 'patchpanel')
+            ),
+            self::countCheck(
+                __('Panel links conflicting with rear sockets', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_panelportlinks l
+                 INNER JOIN glpi_plugin_patchpanel_portendpoints e
+                   ON e.plugin_patchpanel_panelports_id IN (l.panelports_id_a, l.panelports_id_b)
+                  AND e.side = 'rear'
+                  AND e.itemtype = 'Glpi\\\\Socket'
+                  AND e.items_id > 0
+                 WHERE l.is_active = 1",
+                __('Disconnect the rear socket or remove the conflicting panel-to-panel link.', 'patchpanel')
             ),
             self::countCheck(
                 __('Hidden GLPI ports without a panel port', 'patchpanel'),
