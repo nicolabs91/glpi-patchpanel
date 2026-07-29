@@ -189,6 +189,11 @@ a conflicting socket behind an active link, even when the imported port fields
 themselves have not changed since the import. A later version can add peer and
 cable metadata columns without changing the canonical model.
 
+The rollback-safe lifecycle checkpoint covers creation, lookup from both
+endpoints, peer reassignment, release of the old peer and deletion. It also
+proves that a compact-form save without metadata fields preserves any existing
+canonical metadata instead of clearing it.
+
 ## Performance boundaries
 
 - Link lookup for one port uses indexed A/B predicates.
