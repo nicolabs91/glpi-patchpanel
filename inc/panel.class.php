@@ -150,10 +150,6 @@ class PluginPatchpanelPanel extends CommonDBTM
     {
         global $DB;
 
-        $DB->delete('glpi_plugin_patchpanel_audits', [
-            'plugin_patchpanel_panels_id' => $this->getID(),
-        ]);
-
         $portIds = [];
         foreach ($DB->request([
             'SELECT' => ['id'],
@@ -164,6 +160,9 @@ class PluginPatchpanelPanel extends CommonDBTM
         }
 
         if ($portIds) {
+            foreach ($portIds as $portId) {
+                PluginPatchpanelPanelPortLink::deleteForPanelPort($portId);
+            }
             $batchUuids = [];
             $changeIds = [];
             foreach ($DB->request([
@@ -208,6 +207,10 @@ class PluginPatchpanelPanel extends CommonDBTM
             PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts($portIds);
             $DB->delete(PluginPatchpanelPanelPort::getTable(), ['id' => $portIds]);
         }
+
+        $DB->delete('glpi_plugin_patchpanel_audits', [
+            'plugin_patchpanel_panels_id' => $this->getID(),
+        ]);
     }
 
     public function pre_deleteItem()

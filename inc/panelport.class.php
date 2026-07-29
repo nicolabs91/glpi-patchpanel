@@ -120,6 +120,24 @@ class PluginPatchpanelPanelPort extends CommonDBChild
                 ]) as $endpoint) {
                     $connectedIds[] = (int) $endpoint['plugin_patchpanel_panelports_id'];
                 }
+                foreach ($DB->request([
+                    'SELECT' => ['panelports_id_a', 'panelports_id_b'],
+                    'FROM' => PluginPatchpanelPanelPortLink::getTable(),
+                    'WHERE' => [
+                        'is_active' => 1,
+                        'OR' => [
+                            'panelports_id_a' => $extraIds,
+                            'panelports_id_b' => $extraIds,
+                        ],
+                    ],
+                ]) as $link) {
+                    foreach (['panelports_id_a', 'panelports_id_b'] as $field) {
+                        $linkedPortId = (int) $link[$field];
+                        if (in_array($linkedPortId, $extraIds, true)) {
+                            $connectedIds[] = $linkedPortId;
+                        }
+                    }
+                }
                 $deletableIds = array_values(array_diff($extraIds, array_unique($connectedIds)));
                 if ($deletableIds) {
                     PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts($deletableIds);
@@ -156,6 +174,7 @@ class PluginPatchpanelPanelPort extends CommonDBChild
     {
         global $DB;
 
+        PluginPatchpanelPanelPortLink::deleteForPanelPort((int) $this->getID());
         PluginPatchpanelPortEndpoint::cleanupPanelNetworkPortsForPanelPorts([
             (int) $this->getID(),
         ]);
