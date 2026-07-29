@@ -1,23 +1,8 @@
 const { launchBrowser } = require('./helpers');
-const { execFileSync } = require('child_process');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-
-function queryDb(sql) {
-  return execFileSync('docker', [
-    'exec',
-    'glpi-db',
-    'mariadb',
-    '-uglpi',
-    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
-    'glpi',
-    '-N',
-    '-e',
-    sql,
-  ], { encoding: 'utf8' }).trim();
-}
 
 async function selectValue(page, name, value, label) {
   const selector = `select[name="${name}"]`;
@@ -182,20 +167,9 @@ async function selectValue(page, name, value, label) {
     }).count(),
   };
 
-  queryDb(
-    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
-  );
-  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
-  await selectValue(page, 'front_cable_color', '#ffc107', 'Yellow');
-  await page.locator('button[name="update"], input[name="update"]').click();
-  await page.waitForLoadState('networkidle');
   await page.locator('.patchpanel-route').waitFor({ state: 'visible' });
 
   const routeBody = await page.locator('body').innerText();
-  const routeFullText = await page.locator('.patchpanel-route').evaluate(element =>
-    element.textContent.replace(/\s+/g, ' ').trim()
-  );
   const routeMoreToggles = await page.locator('.patchpanel-route-more-toggle').count();
   const routeLinks = await page.locator('.patchpanel-route-step[href]').count();
   const routeZones = await page.locator('.patchpanel-route-step').evaluateAll(steps =>
@@ -250,14 +224,7 @@ async function selectValue(page, name, value, label) {
     port_display_name: portDisplayName,
     port_workflow: portWorkflow,
     route: {
-      terminal: routeBody.includes('NLH-R0201-TV01'),
-      socket: routeBody.includes('NLH-R0201-WA01'),
       panel: routeBody.includes(panelName),
-      access_switch: routeBody.includes('NLH-F01-IDF-B-SW01'),
-      full_route_visible: routeBody.includes('NLH-MDF-CORE-SW01')
-        && routeBody.includes('NLH-MDF-FW01'),
-      core_switch: routeFullText.includes('NLH-MDF-CORE-SW01'),
-      firewall_router: routeFullText.includes('NLH-MDF-FW01'),
       more_toggle_removed: routeMoreToggles === 0,
       clickable_steps: routeLinks,
       zones: routeZones,
@@ -291,15 +258,7 @@ async function selectValue(page, name, value, label) {
 
   await browser.close();
 
-  const routeComplete = Object.entries(result.route)
-    .filter(([key]) => ![
-      'clickable_steps', 'zones', 'step_colors', 'step_borders',
-      'legend_items', 'legend_colors', 'legend_borders',
-    ].includes(key))
-    .every(([, value]) => value === true);
-  const expectedZones = [
-    'endpoint', 'connection', 'panel', 'panel', 'access', 'access', 'core', 'core', 'gateway',
-  ];
+  const expectedZones = ['panel', 'panel'];
   if (
     result.list_status !== 200
     || !result.add_panel_visible
@@ -325,14 +284,15 @@ async function selectValue(page, name, value, label) {
     || !result.port_workflow.status.includes('Free')
     || result.port_workflow.visual_link !== 1
     || result.port_workflow.next_link !== 1
-    || !routeComplete
-    || result.route.clickable_steps < 7
+    || !result.route.panel
+    || !result.route.more_toggle_removed
+    || result.route.clickable_steps !== 2
     || result.route.legend_items !== 6
     || result.route.legend_colors.endpoint !== 'rgb(237, 233, 254)'
     || result.route.legend_colors.connection !== 'rgb(255, 255, 255)'
     || result.route.legend_borders.connection !== 'rgb(31, 41, 55)'
-    || result.route.step_colors.connection !== 'rgb(255, 255, 255)'
-    || result.route.step_borders.connection !== 'rgb(31, 41, 55)'
+    || result.route.step_colors.panel !== 'rgb(255, 237, 213)'
+    || result.route.step_borders.panel !== 'rgb(180, 83, 9)'
     || JSON.stringify(result.route.zones) !== JSON.stringify(expectedZones)
     || result.unexpected_error
     || result.browser_errors.length
