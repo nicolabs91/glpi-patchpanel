@@ -9,6 +9,9 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
     public const REAR = 'rear';
     public const FRONT = 'front';
+    public const REAR_NONE = 'none';
+    public const REAR_SOCKET = 'socket';
+    public const REAR_PANEL_PORT = 'panel_port';
 
     private static bool $syncingNativeNetworkPortLink = false;
 
@@ -36,16 +39,77 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         $endpoints = self::getForPort($portId);
         $rear = $endpoints[self::REAR] ?? [];
         $front = $endpoints[self::FRONT] ?? [];
+        $panelLink = PluginPatchpanelPanelPortLink::getForPanelPort($portId);
+        $peerPortId = $panelLink
+            ? PluginPatchpanelPanelPortLink::getPeerPanelPortId($panelLink, $portId)
+            : 0;
+        $rearType = $panelLink
+            ? self::REAR_PANEL_PORT
+            : ((int) ($rear['items_id'] ?? 0) > 0 ? self::REAR_SOCKET : self::REAR_NONE);
 
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
             __('Rear side: permanent cabling', 'patchpanel') . '</th></tr>';
+        echo "<tr class='tab_bg_1'><td>" . __('Rear connection type', 'patchpanel') . "</td><td>";
+        Dropdown::showFromArray('rear_endpoint_type', [
+            self::REAR_NONE => __('Not connected', 'patchpanel'),
+            self::REAR_SOCKET => __('Remote endpoint / connection point', 'patchpanel'),
+            self::REAR_PANEL_PORT => __('Another patch panel port', 'patchpanel'),
+        ], ['value' => $rearType]);
+        echo '</td><td colspan="2">' .
+            htmlescape(__('Choose the matching field below; the other selection is ignored.', 'patchpanel')) .
+            '</td></tr>';
         echo "<tr class='tab_bg_1'><td>" . __('Remote endpoint / connection point', 'patchpanel') . "</td><td>";
         Dropdown::show('Glpi\\Socket', [
             'name' => 'rear_items_id',
-            'value' => $rear['items_id'] ?? 0,
-            'condition' => self::getAvailableCondition('Glpi\\Socket', (int) ($rear['items_id'] ?? 0)),
+            'value' => $rearType === self::REAR_SOCKET ? ($rear['items_id'] ?? 0) : 0,
+            'condition' => self::getAvailableCondition(
+                'Glpi\\Socket',
+                $rearType === self::REAR_SOCKET ? (int) ($rear['items_id'] ?? 0) : 0
+            ),
         ]);
-        echo '</td><td colspan="2"></td></tr>';
+        echo '</td><td>' . __('Linked patch panel port', 'patchpanel') . '</td><td>';
+        Dropdown::showFromArray(
+            'rear_panelport_id',
+            self::getAvailablePanelPortOptions(
+                $portId,
+                $peerPortId
+            ),
+            [
+                'value' => $peerPortId,
+            ]
+        );
+        echo '</td></tr>';
+        echo "<tr class='tab_bg_1'><td>" . __('Cable label', 'patchpanel') . '</td><td>';
+        echo Html::input('panel_link_cable_label', [
+            'value' => (string) ($panelLink['cable_label'] ?? ''),
+        ]);
+        echo '</td><td>' . __('Cable color', 'patchpanel') . '</td><td>';
+        self::showColorDropdown(
+            'panel_link_cable_color',
+            (string) ($panelLink['cable_color'] ?? '')
+        );
+        echo '</td></tr>';
+        echo "<tr class='tab_bg_1'><td>" . __('Link media', 'patchpanel') . '</td><td>';
+        Dropdown::showFromArray(
+            'panel_link_media_type',
+            PluginPatchpanelPanelPort::getMediaOptions(),
+            ['value' => (string) ($panelLink['media_type'] ?? 'fiber')]
+        );
+        echo '</td><td>' . __('Length', 'patchpanel') . '</td><td>';
+        echo Html::input('panel_link_length', [
+            'value' => (string) ($panelLink['length'] ?? ''),
+            'type' => 'number',
+            'min' => 0,
+            'step' => '0.01',
+        ]);
+        echo '</td></tr>';
+        echo "<tr class='tab_bg_1'><td>" . _n('Comment', 'Comments', 1) . '</td><td colspan="3">';
+        Html::textarea([
+            'name' => 'panel_link_comment',
+            'value' => (string) ($panelLink['comment'] ?? ''),
+            'rows' => 3,
+        ]);
+        echo '</td></tr>';
 
         echo "<tr class='tab_bg_2'><th colspan='4'>" .
             __('Front side: patch cable', 'patchpanel') . '</th></tr>';
@@ -95,6 +159,73 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         return $condition;
     }
 
+    private static function getAvailablePanelPortOptions(int $portId, int $currentId): array
+    {
+        global $DB;
+
+        $rearByPort = [];
+        foreach ($DB->request([
+            'SELECT' => [
+                'plugin_patchpanel_panelports_id',
+                'itemtype',
+                'items_id',
+            ],
+            'FROM' => self::getTable(),
+            'WHERE' => ['side' => self::REAR],
+        ]) as $endpoint) {
+            $rearByPort[(int) $endpoint['plugin_patchpanel_panelports_id']] = $endpoint;
+        }
+
+        $panels = [];
+        $options = ['' => Dropdown::EMPTY_VALUE];
+        foreach ($DB->request([
+            'FROM' => PluginPatchpanelPanelPort::getTable(),
+            'ORDER' => [
+                'plugin_patchpanel_panels_id',
+                'number',
+            ],
+        ]) as $row) {
+            $candidateId = (int) $row['id'];
+            if ($candidateId === $portId) {
+                continue;
+            }
+
+            $rear = $rearByPort[$candidateId] ?? null;
+            if ($rear) {
+                continue;
+            }
+            $canonicalLink = PluginPatchpanelPanelPortLink::getForPanelPort($candidateId);
+            if ($canonicalLink && $candidateId !== $currentId) {
+                continue;
+            }
+
+            $panelId = (int) $row['plugin_patchpanel_panels_id'];
+            if (!array_key_exists($panelId, $panels)) {
+                $panel = new PluginPatchpanelPanel();
+                $panels[$panelId] = $panel->getFromDB($panelId) && $panel->canViewItem()
+                    ? $panel
+                    : null;
+            }
+            $panel = $panels[$panelId];
+            if (!$panel) {
+                continue;
+            }
+
+            $panelName = trim((string) $panel->getName());
+            if ($panelName === '') {
+                $panelName = sprintf(__('Patch panel #%d', 'patchpanel'), $panelId);
+            }
+            $portName = sprintf(__('Port %d', 'patchpanel'), (int) $row['number']);
+            $label = trim((string) ($row['label'] ?? ''));
+            if ($label !== '' && strcasecmp($label, $portName) !== 0) {
+                $portName .= ' · ' . $label;
+            }
+            $options[$candidateId] = $panelName . ' / ' . $portName;
+        }
+
+        return $options;
+    }
+
     public static function saveForPort(
         int $portId,
         array $input,
@@ -116,7 +247,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
         $desired = [
             self::REAR => [
-                'itemtype' => 'Glpi\\Socket',
+                'itemtype' => \Glpi\Socket::class,
                 'items_id' => (int) ($input['rear_items_id'] ?? 0),
                 'cable_color' => null,
                 'cables_id' => 0,
@@ -190,7 +321,6 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         ) {
             self::disconnectSocketDevice((int) $existing['items_id']);
         }
-
         $deleted = $DB->delete(self::getTable(), [
             'plugin_patchpanel_panelports_id' => $portId,
             'side' => $side,

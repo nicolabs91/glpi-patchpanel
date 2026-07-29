@@ -81,7 +81,14 @@ if (isset($_POST['update'])) {
     $portInput = $_POST;
     foreach ([
         'rear_items_id',
+        'rear_endpoint_type',
+        'rear_panelport_id',
         'rear_cable_color',
+        'panel_link_cable_label',
+        'panel_link_cable_color',
+        'panel_link_media_type',
+        'panel_link_length',
+        'panel_link_comment',
         'front_items_id',
         'front_cable_color',
         'front_cables_id',
@@ -89,6 +96,11 @@ if (isset($_POST['update'])) {
         unset($portInput[$field]);
     }
     $endpointInput = $_POST;
+    $rearType = (string) ($_POST['rear_endpoint_type'] ?? PluginPatchpanelPortEndpoint::REAR_NONE);
+    $endpointInput['rear_endpoint_type'] = PluginPatchpanelPortEndpoint::REAR_SOCKET;
+    if ($rearType !== PluginPatchpanelPortEndpoint::REAR_SOCKET) {
+        $endpointInput['rear_items_id'] = 0;
+    }
     unset($endpointInput['front_cables_id']);
 
     global $DB;
@@ -98,8 +110,27 @@ if (isset($_POST['update'])) {
         if (!$port->update($portInput)) {
             throw new RuntimeException('Port update failed');
         }
+        if (
+            $rearType !== PluginPatchpanelPortEndpoint::REAR_PANEL_PORT
+            && !PluginPatchpanelPanelPortLink::deleteForPanelPort((int) $_POST['id'])
+        ) {
+            throw new RuntimeException('Panel-to-panel link removal failed');
+        }
         if (!PluginPatchpanelPortEndpoint::saveForPort((int) $_POST['id'], $endpointInput, false)) {
             throw new RuntimeException('Endpoint update failed');
+        }
+        if ($rearType === PluginPatchpanelPortEndpoint::REAR_PANEL_PORT) {
+            $peerPortId = (int) ($_POST['rear_panelport_id'] ?? 0);
+            if ($peerPortId <= 0) {
+                throw new InvalidArgumentException(__('Select a target patch panel port.', 'patchpanel'));
+            }
+            if (!PluginPatchpanelPanelPortLink::saveForPorts(
+                (int) $_POST['id'],
+                $peerPortId,
+                $_POST
+            )) {
+                throw new RuntimeException('Panel-to-panel link update failed');
+            }
         }
         PluginPatchpanelAudit::record(
             (int) $port->fields['plugin_patchpanel_panels_id'],

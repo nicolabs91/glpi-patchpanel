@@ -108,4 +108,72 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
             );
         }
     }
+
+    public static function saveForPorts(int $portId, int $peerPortId, array $input): bool
+    {
+        global $DB;
+
+        if ($portId === $peerPortId) {
+            throw new InvalidArgumentException(__('A panel port cannot be linked to itself.', 'patchpanel'));
+        }
+
+        $existing = self::getForPanelPort($portId);
+        $existingPeerId = $existing ? self::getPeerPanelPortId($existing, $portId) : 0;
+        if (!$existing) {
+            self::assertPanelLinkAllowed($portId);
+            self::assertPanelLinkAllowed($peerPortId);
+        } elseif ($existingPeerId !== $peerPortId) {
+            self::assertPanelLinkAllowed($peerPortId);
+        }
+
+        foreach ([$portId, $peerPortId] as $candidateId) {
+            $port = new PluginPatchpanelPanelPort();
+            $port->check($candidateId, UPDATE);
+            $panel = new PluginPatchpanelPanel();
+            $panel->check((int) $port->fields['plugin_patchpanel_panels_id'], UPDATE);
+        }
+
+        [$portIdA, $portIdB] = self::normalizePair($portId, $peerPortId);
+        $length = trim((string) ($input['panel_link_length'] ?? ''));
+        if ($length !== '' && (!is_numeric($length) || (float) $length < 0)) {
+            throw new InvalidArgumentException(__('The cable length must be zero or greater.', 'patchpanel'));
+        }
+        $color = trim((string) ($input['panel_link_cable_color'] ?? ''));
+        if ($color !== '' && !preg_match('/^#[0-9a-f]{6}$/i', $color)) {
+            throw new InvalidArgumentException(__('The cable color is invalid.', 'patchpanel'));
+        }
+        $media = (string) ($input['panel_link_media_type'] ?? 'fiber');
+        if (!array_key_exists($media, PluginPatchpanelPanelPort::getMediaOptions())) {
+            throw new InvalidArgumentException(__('The link media type is invalid.', 'patchpanel'));
+        }
+
+        $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+        $fields = [
+            'panelports_id_a' => $portIdA,
+            'panelports_id_b' => $portIdB,
+            'cable_label' => trim((string) ($input['panel_link_cable_label'] ?? '')) ?: null,
+            'media_type' => $media,
+            'cable_color' => $color !== '' ? strtolower($color) : null,
+            'length' => $length !== '' ? (float) $length : null,
+            'comment' => trim((string) ($input['panel_link_comment'] ?? '')) ?: null,
+            'is_active' => 1,
+            'date_mod' => $now,
+        ];
+
+        if ($existing) {
+            return $DB->update(self::getTable(), $fields, ['id' => (int) $existing['id']]);
+        }
+        return $DB->insert(self::getTable(), $fields + ['date_creation' => $now]);
+    }
+
+    public static function deleteForPanelPort(int $portId): bool
+    {
+        global $DB;
+
+        $link = self::getForPanelPort($portId, false);
+        if (!$link) {
+            return true;
+        }
+        return $DB->delete(self::getTable(), ['id' => (int) $link['id']]);
+    }
 }
