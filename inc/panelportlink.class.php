@@ -142,7 +142,7 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
         if ($color !== '' && !preg_match('/^#[0-9a-f]{6}$/i', $color)) {
             throw new InvalidArgumentException(__('The cable color is invalid.', 'patchpanel'));
         }
-        $media = (string) ($input['panel_link_media_type'] ?? ($existing['media_type'] ?? 'fiber'));
+        $media = (string) ($input['panel_link_media_type'] ?? ($existing['media_type'] ?? 'other'));
         if (!array_key_exists($media, PluginPatchpanelPanelPort::getMediaOptions())) {
             throw new InvalidArgumentException(__('The link media type is invalid.', 'patchpanel'));
         }
@@ -164,10 +164,36 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
             'date_mod' => $now,
         ];
 
+        $before = $existing ? self::getAuditSnapshot($existing) : [];
         if ($existing) {
-            return $DB->update(self::getTable(), $fields, ['id' => (int) $existing['id']]);
+            $saved = $DB->update(self::getTable(), $fields, ['id' => (int) $existing['id']]);
+            $linkId = (int) $existing['id'];
+        } else {
+            $saved = $DB->insert(self::getTable(), $fields + ['date_creation' => $now]);
+            $linkId = 0;
         }
-        return $DB->insert(self::getTable(), $fields + ['date_creation' => $now]);
+        if (!$saved) {
+            return false;
+        }
+
+        $savedLink = $DB->request([
+            'FROM' => self::getTable(),
+            'WHERE' => $linkId > 0
+                ? ['id' => $linkId]
+                : [
+                    'panelports_id_a' => $portIdA,
+                    'panelports_id_b' => $portIdB,
+                ],
+            'LIMIT' => 1,
+        ])->current();
+        if ($savedLink) {
+            self::recordAudit(
+                $existing ? 'panel_link_update' : 'panel_link_create',
+                $before,
+                self::getAuditSnapshot($savedLink)
+            );
+        }
+        return true;
     }
 
     public static function deleteForPanelPort(int $portId): bool
@@ -178,6 +204,70 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
         if (!$link) {
             return true;
         }
-        return $DB->delete(self::getTable(), ['id' => (int) $link['id']]);
+        $before = self::getAuditSnapshot($link);
+        $deleted = $DB->delete(self::getTable(), ['id' => (int) $link['id']]);
+        if ($deleted) {
+            self::recordAudit('panel_link_delete', $before, []);
+        }
+        return $deleted;
+    }
+
+    private static function getAuditSnapshot(array $link): array
+    {
+        $snapshot = [
+            'link_id' => (int) ($link['id'] ?? 0),
+            'panelports_id_a' => (int) ($link['panelports_id_a'] ?? 0),
+            'panelports_id_b' => (int) ($link['panelports_id_b'] ?? 0),
+            'cable_label' => $link['cable_label'] ?? null,
+            'media_type' => $link['media_type'] ?? null,
+            'cable_color' => $link['cable_color'] ?? null,
+            'length' => isset($link['length']) ? (float) $link['length'] : null,
+            'comment' => $link['comment'] ?? null,
+        ];
+        foreach (['a', 'b'] as $side) {
+            $portId = $snapshot['panelports_id_' . $side];
+            $port = new PluginPatchpanelPanelPort();
+            $port->getFromDB($portId);
+            $panelId = (int) ($port->fields['plugin_patchpanel_panels_id'] ?? 0);
+            $panel = new PluginPatchpanelPanel();
+            $panel->getFromDB($panelId);
+            $panelName = trim((string) ($panel->fields['name'] ?? ''));
+            $snapshot['endpoint_' . $side] = [
+                'panel_id' => $panelId,
+                'panel_name' => $panelName !== ''
+                    ? $panelName
+                    : sprintf(__('Panel #%d', 'patchpanel'), $panelId),
+                'port_id' => $portId,
+                'port_number' => (int) ($port->fields['number'] ?? 0),
+            ];
+        }
+        return $snapshot;
+    }
+
+    private static function recordAudit(string $action, array $before, array $after): void
+    {
+        $snapshot = $after ?: $before;
+        foreach (['a', 'b'] as $side) {
+            $endpoint = $snapshot['endpoint_' . $side] ?? [];
+            $peer = $snapshot['endpoint_' . ($side === 'a' ? 'b' : 'a')] ?? [];
+            $panelId = (int) ($endpoint['panel_id'] ?? 0);
+            $portId = (int) ($endpoint['port_id'] ?? 0);
+            if ($panelId <= 0 || $portId <= 0) {
+                continue;
+            }
+            PluginPatchpanelAudit::record(
+                $panelId,
+                $portId,
+                $action,
+                'panel_port_form',
+                sprintf(
+                    __('Panel link with %1$s / port %2$d', 'patchpanel'),
+                    (string) ($peer['panel_name'] ?? ''),
+                    (int) ($peer['port_number'] ?? 0)
+                ),
+                $before,
+                $after
+            );
+        }
     }
 }
