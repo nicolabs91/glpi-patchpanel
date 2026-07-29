@@ -15,6 +15,7 @@ function plugin_init_patchpanel(): void
     Plugin::registerClass('PluginPatchpanelPanel');
     Plugin::registerClass('PluginPatchpanelPanelModel');
     Plugin::registerClass('PluginPatchpanelPanelPort');
+    Plugin::registerClass('PluginPatchpanelPanelPortLink');
     Plugin::registerClass('PluginPatchpanelPortEndpoint', [
         'addtabon' => array_values(array_unique(array_merge(
             ['Glpi\\Socket', NetworkPort::class],

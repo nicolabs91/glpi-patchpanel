@@ -14,6 +14,7 @@ function plugin_patchpanel_uninstall(): bool
     // Old third-party PatchPanel tables are deliberately excluded. Removing
     // data outside this replacement plugin should stay an explicit DB action.
     foreach ([
+        'glpi_plugin_patchpanel_panelportlinks',
         'glpi_plugin_patchpanel_portendpoints',
         'glpi_plugin_patchpanel_panelports',
         'glpi_plugin_patchpanel_panels',
@@ -45,6 +46,7 @@ function plugin_patchpanel_getDatabaseRelations(): array
         ],
         'glpi_plugin_patchpanel_panelports' => [
             'glpi_plugin_patchpanel_portendpoints' => 'plugin_patchpanel_panelports_id',
+            'glpi_plugin_patchpanel_panelportlinks' => 'panelports_id_a',
         ],
     ];
 }

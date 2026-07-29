@@ -72,6 +72,26 @@ CREATE TABLE `glpi_plugin_patchpanel_panelports` (
   KEY `panel_layout` (`plugin_patchpanel_panels_id`,`row`,`position`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL,
+            'glpi_plugin_patchpanel_panelportlinks' => <<<'SQL'
+CREATE TABLE `glpi_plugin_patchpanel_panelportlinks` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `panelports_id_a` int unsigned NOT NULL,
+  `panelports_id_b` int unsigned NOT NULL,
+  `cable_label` varchar(255) DEFAULT NULL,
+  `media_type` varchar(32) NOT NULL DEFAULT 'other',
+  `cable_color` varchar(24) DEFAULT NULL,
+  `length` decimal(20,4) DEFAULT NULL,
+  `comment` text DEFAULT NULL,
+  `is_active` tinyint NOT NULL DEFAULT 1,
+  `date_creation` timestamp NULL DEFAULT NULL,
+  `date_mod` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `link_pair` (`panelports_id_a`,`panelports_id_b`),
+  KEY `panelports_id_a` (`panelports_id_a`),
+  KEY `panelports_id_b` (`panelports_id_b`),
+  KEY `is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
             'glpi_plugin_patchpanel_portendpoints' => <<<'SQL'
 CREATE TABLE `glpi_plugin_patchpanel_portendpoints` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
@@ -161,8 +181,112 @@ SQL,
 
         self::upgradePanelModelTable();
         self::upgradeMigrationTable();
+        self::migrateExperimentalPanelPortLinks();
         self::seedModels();
         self::repairLegacyRackRelations();
+    }
+
+    /**
+     * Convert only complete reciprocal rows created by the unreleased 0.2.1
+     * experiment. The canonical insert and removal of both old rows share one
+     * transaction, making the conversion safe to retry after interruption.
+     */
+    private static function migrateExperimentalPanelPortLinks(): void
+    {
+        global $DB;
+
+        $endpointTable = PluginPatchpanelPortEndpoint::getTable();
+        $linkTable = PluginPatchpanelPanelPortLink::getTable();
+        if (!$DB->tableExists($endpointTable) || !$DB->tableExists($linkTable)) {
+            return;
+        }
+
+        $experimental = [];
+        foreach ($DB->request([
+            'SELECT' => [
+                'id',
+                'plugin_patchpanel_panelports_id',
+                'items_id',
+            ],
+            'FROM' => $endpointTable,
+            'WHERE' => [
+                'side' => PluginPatchpanelPortEndpoint::REAR,
+                'itemtype' => PluginPatchpanelPanelPort::class,
+            ],
+        ]) as $row) {
+            $sourceId = (int) $row['plugin_patchpanel_panelports_id'];
+            $targetId = (int) $row['items_id'];
+            if ($sourceId > 0 && $targetId > 0 && $sourceId !== $targetId) {
+                $experimental[$sourceId] = [
+                    'id' => (int) $row['id'],
+                    'target_id' => $targetId,
+                ];
+            }
+        }
+
+        $processed = [];
+        foreach ($experimental as $sourceId => $row) {
+            $targetId = $row['target_id'];
+            [$portIdA, $portIdB] = PluginPatchpanelPanelPortLink::normalizePair(
+                $sourceId,
+                $targetId
+            );
+            $pairKey = $portIdA . ':' . $portIdB;
+            if (
+                isset($processed[$pairKey])
+                || ($experimental[$targetId]['target_id'] ?? 0) !== $sourceId
+            ) {
+                continue;
+            }
+            $processed[$pairKey] = true;
+
+            if (
+                countElementsInTable(
+                    PluginPatchpanelPanelPort::getTable(),
+                    ['id' => [$portIdA, $portIdB]]
+                ) !== 2
+            ) {
+                continue;
+            }
+
+            $DB->beginTransaction();
+            try {
+                $existing = $DB->request([
+                    'SELECT' => ['id'],
+                    'FROM' => $linkTable,
+                    'WHERE' => [
+                        'panelports_id_a' => $portIdA,
+                        'panelports_id_b' => $portIdB,
+                    ],
+                    'LIMIT' => 1,
+                ])->current();
+                if (!$existing) {
+                    $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+                    $DB->insert($linkTable, [
+                        'panelports_id_a' => $portIdA,
+                        'panelports_id_b' => $portIdB,
+                        'media_type' => 'other',
+                        'is_active' => 1,
+                        'date_creation' => $now,
+                        'date_mod' => $now,
+                    ]);
+                }
+                $DB->delete($endpointTable, [
+                    'id' => [
+                        (int) $experimental[$sourceId]['id'],
+                        (int) $experimental[$targetId]['id'],
+                    ],
+                ]);
+                $DB->commit();
+            } catch (Throwable $e) {
+                $DB->rollBack();
+                Toolbox::logInFile(
+                    'php-errors',
+                    'PatchPanel panel-link migration failed for ports ' .
+                    $portIdA . ' and ' . $portIdB . ': ' . $e->getMessage() . "\n"
+                );
+            }
+        }
     }
 
     private static function upgradePanelModelTable(): void
