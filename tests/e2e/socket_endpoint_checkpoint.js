@@ -19,7 +19,25 @@ function queryDb(sql) {
   ], { encoding: 'utf8' }).trim();
 }
 
+function requireFixture(sql, description) {
+  if (queryDb(sql) !== '1') {
+    throw new Error(`Missing E2E fixture: ${description}`);
+  }
+}
+
 function resetAp001Route() {
+  requireFixture(
+    'SELECT COUNT(*) FROM glpi_plugin_patchpanel_panelports WHERE id = 2605',
+    'panel port 2605',
+  );
+  requireFixture(
+    'SELECT COUNT(*) FROM glpi_networkports WHERE id = 224 AND is_deleted = 0',
+    'front network port 224',
+  );
+  requireFixture(
+    'SELECT COUNT(*) FROM glpi_sockets WHERE id = 86',
+    'socket 86',
+  );
   queryDb(
     "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
   );
