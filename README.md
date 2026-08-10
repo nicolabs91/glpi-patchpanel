@@ -44,7 +44,7 @@ Administrative tools are available from the plugin settings page:
 
 ## Compatibility
 
-PatchPanel `0.2.0` targets GLPI 11 and PHP 8.2 or newer.
+PatchPanel `0.2.1` targets GLPI 11 and PHP 8.2 or newer.
 
 ## Installation and upgrade
 

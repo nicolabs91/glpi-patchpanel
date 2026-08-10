@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 - 2026-08-10
 
 - Show hotel access-point routes with the unique device name followed by the
   functional port label, for example `HTL-AP-L2-16 · LAN`, and migrate the
