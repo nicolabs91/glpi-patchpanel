@@ -8,7 +8,7 @@ header('Content-Type: application/json');
 
 $socketId = (int) ($_REQUEST['id'] ?? 0);
 $socket = new \Glpi\Socket();
-if ($socketId <= 0 || !$socket->getFromDB($socketId)) {
+if ($socketId <= 0 || !$socket->getFromDB($socketId) || !$socket->canViewItem()) {
     http_response_code(404);
     echo json_encode(['ok' => false, 'error' => 'socket_not_found']);
     exit;

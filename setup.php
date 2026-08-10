@@ -49,8 +49,18 @@ function plugin_init_patchpanel(): void
         = 'plugin_patchpanel_sync_front_endpoint_after_native_connect';
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][NetworkPort_NetworkPort::class]
         = 'plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect';
+    foreach (array_unique(array_merge([NetworkEquipment::class], $CFG_GLPI['networkport_types'] ?? [])) as $ownerType) {
+        if (is_string($ownerType) && class_exists($ownerType)) {
+            $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_UPDATE]['patchpanel'][$ownerType]
+                = 'plugin_patchpanel_cleanup_front_endpoints_after_owner_soft_delete';
+        }
+    }
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_UPDATE]['patchpanel'][NetworkPort::class]
+        = 'plugin_patchpanel_cleanup_front_endpoint_after_port_soft_delete';
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][\Glpi\Socket::class]
+        = 'plugin_patchpanel_cleanup_rear_endpoint_after_socket_purge';
     $PLUGIN_HOOKS['add_css']['patchpanel'] = 'public/css/patchpanel.css';
-    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/patchpanel-ui-v4.js';
+    $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/patchpanel-ui-v5.js';
 }
 
 function plugin_version_patchpanel(): array

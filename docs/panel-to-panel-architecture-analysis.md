@@ -44,6 +44,12 @@ front switch/network port. This is intentionally separate from permanent rear
 cabling. A panel-to-panel link must not delete or replace either port's front
 endpoint or managed native link.
 
+A managed shadow port may only have one native `Connected to` relation to a
+real, active GLPI network port, and its parent panel must still be active.
+Shadow-to-shadow relations and relations through deleted panels are rolled
+back by the add hook. Health also reports legacy rows that violate these
+invariants.
+
 ## Existing route reconstruction
 
 `PluginPatchpanelRoute::buildForPort()` currently:
@@ -95,11 +101,10 @@ from CSV, but reject any import that would add a rear socket to a linked port.
 
 The existing browser suite covers the menu, CRUD, sockets, native links,
 routes, explorer, CSV, labels, audit, corrupt data, health and accessibility.
-Several checkpoints depend on fixed IDs and names from an older NLH demo
-database while the active test stack contains the newer HTL dataset. Those
-are test-fixture failures, not acceptable evidence about the product. Round 12
-must replace these assumptions with isolated fixtures created and removed by
-the tests.
+The former fixed NLH demo IDs, names and shared rack positions have been
+replaced with uniquely named fixtures created for each checkpoint and removed
+in `finally` cleanup. Both complete browser suites can therefore run against a
+shared GLPI test database without depending on its pre-existing inventory.
 
 ## Design decision
 
@@ -125,10 +130,10 @@ addition to server-side validation.
   documentation and E2E areas.
 - Confirmed the repository remote is `nicolabs91/glpi-patchpanel`.
 - Confirmed the active Docker stack loads the working tree directly.
-- Ran the existing 14-checkpoint Chromium sweep: 6 passed and 8 failed.
-  Investigation showed the majority of failures use stale NLH fixture IDs
-  against the HTL database. This suite cannot be treated as a release gate
-  until fixtures are isolated.
+- The original 14-checkpoint Chromium sweep exposed stale NLH fixture IDs
+  against the HTL database. Those dependencies were later replaced with
+  self-cleaning fixtures; the expanded 15-checkpoint Chromium and Firefox
+  suites now pass as release gates.
 - Directly exercised the unfinished reciprocal endpoint implementation. The
   two rows were written symmetrically, but the selected peer initially rendered
   as an empty dropdown label, reinforcing the decision not to release that

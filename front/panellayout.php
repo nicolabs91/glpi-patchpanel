@@ -10,7 +10,7 @@ header('Content-Type: application/json');
 $panelId = (int) ($_GET['id'] ?? 0);
 $rackId = (int) ($_GET['rack_id'] ?? 0);
 $panel = new PluginPatchpanelPanel();
-if ($panelId <= 0 || !$panel->getFromDB($panelId)) {
+if ($panelId <= 0 || !$panel->getFromDB($panelId) || !$panel->canViewItem()) {
     http_response_code(404);
     echo json_encode(['ok' => false, 'error' => 'panel_not_found']);
     exit;
@@ -25,7 +25,12 @@ if ($modelId > 0 && $model->getFromDB($modelId)) {
 
 $rack = new Rack();
 $rackUnits = 0;
-if ($rackId > 0 && $rack->getFromDB($rackId)) {
+if ($rackId > 0) {
+    if (!$rack->getFromDB($rackId) || !$rack->canViewItem()) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'rack_not_found']);
+        exit;
+    }
     $rackUnits = max(1, (int) ($rack->fields['number_units'] ?? 0));
 }
 

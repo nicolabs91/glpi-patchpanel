@@ -97,6 +97,16 @@ if (isset($_POST['update'])) {
     }
     $endpointInput = $_POST;
     $rearType = (string) ($_POST['rear_endpoint_type'] ?? PluginPatchpanelPortEndpoint::REAR_NONE);
+    $peerPortId = (int) ($_POST['rear_panelport_id'] ?? 0);
+    if (
+        $rearType === PluginPatchpanelPortEndpoint::REAR_NONE
+        && $peerPortId > 0
+        && !PluginPatchpanelPanelPortLink::hasActiveLink((int) $_POST['id'])
+    ) {
+        // A selected peer is an unambiguous create intent. Keep saving robust
+        // when an older cached script did not synchronize the type dropdown.
+        $rearType = PluginPatchpanelPortEndpoint::REAR_PANEL_PORT;
+    }
     $endpointInput['rear_endpoint_type'] = PluginPatchpanelPortEndpoint::REAR_SOCKET;
     if ($rearType !== PluginPatchpanelPortEndpoint::REAR_SOCKET) {
         $endpointInput['rear_items_id'] = 0;
@@ -120,7 +130,6 @@ if (isset($_POST['update'])) {
             throw new RuntimeException('Endpoint update failed');
         }
         if ($rearType === PluginPatchpanelPortEndpoint::REAR_PANEL_PORT) {
-            $peerPortId = (int) ($_POST['rear_panelport_id'] ?? 0);
             if ($peerPortId <= 0) {
                 throw new InvalidArgumentException(__('Select a target patch panel port.', 'patchpanel'));
             }

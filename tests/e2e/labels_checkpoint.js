@@ -1,12 +1,19 @@
 const { launchBrowser } = require('./helpers');
+const {
+  cleanupRackFixture,
+  createRackFixture,
+  purgePanel,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-const rackId = Number(process.env.GLPI_RACK_ID || 1);
 const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
 
 (async () => {
+  const rackFixture = createRackFixture('LABELS');
+  const rackId = rackFixture.rackId;
+  let panelId = 0;
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
   const errors = [];
@@ -17,6 +24,7 @@ const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
     }
   });
 
+  try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.fill('input[name="login_name"]', username);
   await page.fill('input[name="login_password"]', password);
@@ -34,7 +42,7 @@ const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
   await page.locator('.select2-results__option', { hasText: '48-port copper, 2U' }).last().click();
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
-  const panelId = Number(new URL(page.url()).searchParams.get('id'));
+  panelId = Number(new URL(page.url()).searchParams.get('id'));
 
   await page.goto(`${baseUrl}/front/rack.form.php?id=${rackId}&forcetab=Item_Rack%241`, {
     waitUntil: 'networkidle',
@@ -145,7 +153,6 @@ const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
-  await browser.close();
 
   if (
     !result.rack_itemtype_visible
@@ -164,5 +171,10 @@ const stallRackLayout = process.env.PATCHPANEL_STALL_RACK_LAYOUT === '1';
     || result.browser_errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    await browser.close();
+    purgePanel(panelId);
+    cleanupRackFixture(rackFixture);
   }
 })();

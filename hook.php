@@ -80,3 +80,18 @@ function plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect(Common
 {
     PluginPatchpanelPortEndpoint::cleanupFrontEndpointAfterNativeNetworkPortDisconnect($item);
 }
+
+function plugin_patchpanel_cleanup_front_endpoints_after_owner_soft_delete(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::cleanupFrontEndpointsAfterOwnerSoftDelete($item);
+}
+
+function plugin_patchpanel_cleanup_front_endpoint_after_port_soft_delete(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::cleanupFrontEndpointAfterPortSoftDelete($item);
+}
+
+function plugin_patchpanel_cleanup_rear_endpoint_after_socket_purge(CommonDBTM $item): void
+{
+    PluginPatchpanelPortEndpoint::cleanupRearEndpointAfterSocketPurge($item);
+}

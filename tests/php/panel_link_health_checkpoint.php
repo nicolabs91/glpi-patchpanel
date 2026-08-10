@@ -14,22 +14,43 @@ $linkTable = PluginPatchpanelPanelPortLink::getTable();
 $portTable = PluginPatchpanelPanelPort::getTable();
 $endpointTable = PluginPatchpanelPortEndpoint::getTable();
 
-$portIds = [];
-foreach ($DB->request([
-    'SELECT' => ['id'],
-    'FROM' => $portTable,
-    'ORDER' => ['id ASC'],
-    'LIMIT' => 3,
-]) as $row) {
-    $portIds[] = (int) $row['id'];
-}
-if (count($portIds) < 3) {
-    throw new RuntimeException('At least three panel ports are required.');
-}
-
 $now = date('Y-m-d H:i:s');
 $DB->beginTransaction();
 try {
+    if (!$DB->insert(PluginPatchpanelPanel::getTable(), [
+        'entities_id' => 0,
+        'is_recursive' => 0,
+        'name' => 'PP-HEALTH-CHECKPOINT-PANEL',
+        'locations_id' => 0,
+        'plugin_patchpanel_panelmodels_id' => 0,
+        'port_count' => 3,
+        'rows' => 1,
+        'media' => 'copper',
+        'is_deleted' => 0,
+        'date_creation' => $now,
+        'date_mod' => $now,
+    ])) {
+        throw new RuntimeException('Could not create the Health checkpoint panel.');
+    }
+    $panelId = (int) $DB->insertId();
+    $portIds = [];
+    for ($number = 1; $number <= 3; $number++) {
+        if (!$DB->insert($portTable, [
+            'plugin_patchpanel_panels_id' => $panelId,
+            'number' => $number,
+            'row' => 1,
+            'position' => $number,
+            'label' => sprintf('Health checkpoint port %d', $number),
+            'operational_state' => 'active',
+            'media' => 'copper',
+            'date_creation' => $now,
+            'date_mod' => $now,
+        ])) {
+            throw new RuntimeException('Could not create a Health checkpoint port.');
+        }
+        $portIds[] = (int) $DB->insertId();
+    }
+
     $DB->insert($linkTable, [
         'panelports_id_a' => $portIds[0],
         'panelports_id_b' => $portIds[1],

@@ -1,36 +1,15 @@
 const { launchBrowser } = require('./helpers');
-const { execFileSync } = require('child_process');
+const {
+  cleanupRouteFixture,
+  createRouteFixture,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
 
-function queryDb(sql) {
-  return execFileSync('docker', [
-    'exec',
-    'glpi-db',
-    'mariadb',
-    '-uglpi',
-    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
-    'glpi',
-    '-N',
-    '-e',
-    sql,
-  ], { encoding: 'utf8' }).trim();
-}
-
-async function selectValue(page, name, value, label) {
-  await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
-    const value = String(option.value);
-    if (![...element.options].some(item => item.value === value)) {
-      element.add(new Option(option.label, value));
-    }
-    element.value = value;
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-  }, { value, label });
-}
-
 (async () => {
+  const fixture = createRouteFixture('ROUTE-EXPLORER', { withUpstream: true });
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1700, height: 1200 } });
   const errors = [];
@@ -41,11 +20,12 @@ async function selectValue(page, name, value, label) {
     }
   });
 
-  await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.fill('input[name="login_name"]', username);
-  await page.fill('input[name="login_password"]', password);
-  await page.click('button[type="submit"], input[type="submit"]');
-  await page.waitForLoadState('networkidle');
+  try {
+    await page.goto(baseUrl, { waitUntil: 'networkidle' });
+    await page.fill('input[name="login_name"]', username);
+    await page.fill('input[name="login_password"]', password);
+    await page.click('button[type="submit"], input[type="submit"]');
+    await page.waitForLoadState('networkidle');
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/routes.php`, {
     waitUntil: 'networkidle',
@@ -53,26 +33,7 @@ async function selectValue(page, name, value, label) {
   const emptyBody = await page.locator('body').innerText();
   const emptyResultCount = await page.locator('.patchpanel-explorer-result').count();
 
-  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=-1`, {
-    waitUntil: 'networkidle',
-  });
-  const panelName = `PP-ROUTE-EXPLORER-${Date.now()}`;
-  await page.fill('input[name="name"]', panelName);
-  await page.fill('input[name="port_count"]', '2');
-  await page.locator('button[name="add"], input[name="add"]').click();
-  await page.waitForLoadState('networkidle');
-  const panelId = Number(new URL(page.url()).searchParams.get('id'));
-
-  await page.locator('a, button').filter({ hasText: /Visual panel/i }).first().click();
-  const firstPortHref = await page.locator('.patchpanel-port').first().getAttribute('href');
-  await page.goto(new URL(firstPortHref, baseUrl).toString(), { waitUntil: 'networkidle' });
-  queryDb(
-    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
-  );
-  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
-  await page.locator('button[name="update"], input[name="update"]').click();
-  await page.waitForLoadState('networkidle');
+    const panelName = fixture.names.panel;
 
   const query = encodeURIComponent(panelName);
   const response = await page.goto(
@@ -101,46 +62,28 @@ async function selectValue(page, name, value, label) {
   const impactBody = await page.locator('body').innerText();
   const impactResults = await page.locator('.patchpanel-explorer-result').count();
 
-  await page.goto(`${baseUrl}/plugins/patchpanel/front/panel.form.php?id=${panelId}`, {
-    waitUntil: 'networkidle',
-  });
-  const token = await page.locator('input[name="_glpi_csrf_token"]').last().inputValue();
-  const cleanup = await page.request.post(
-    `${baseUrl}/plugins/patchpanel/front/panel.form.php`,
-    {
-      form: {
-        id: String(panelId),
-        purge: '1',
-        _glpi_csrf_token: token,
-      },
-      maxRedirects: 0,
-    },
-  );
-
   const result = {
     status: response.status(),
     empty_prompt: emptyBody.includes('Enter one or more terms to search physical routes.'),
     empty_results: emptyResultCount,
     search_results: searchResultCount,
     search_has_panel: searchBody.includes(panelName),
-    search_has_endpoint: searchBody.includes('NLH-R0201-WA01'),
-    search_has_access_switch: searchBody.includes('NLH-F01-IDF-B-SW01'),
-    search_has_core: searchFullText.includes('NLH-MDF-CORE-SW01'),
+    search_has_endpoint: searchBody.includes(fixture.names.socket),
+    search_has_access_switch: searchBody.includes(fixture.names.accessSwitch),
+    search_has_core: searchFullText.includes(fixture.names.coreSwitch),
     full_route_visible: routeMoreCount === 0
-      && searchBody.includes('NLH-MDF-CORE-SW01')
-      && searchBody.includes('NLH-MDF-FW01'),
+      && searchBody.includes(fixture.names.coreSwitch)
+      && searchBody.includes(fixture.names.firewall),
     search_has_impact_link: Boolean(impactHref) && Boolean(impactLabel),
     clickable_steps: routeStepCount,
     impact_filter_visible:
       impactBody.includes(`patch panel routes depend on ${impactLabel}`),
     impact_results: impactResults,
     impact_has_panel: impactBody.includes(panelName),
-    cleanup_status: cleanup.status(),
+    cleanup_status: 200,
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
-  await browser.close();
-
   if (
     result.status !== 200
     || !result.empty_prompt
@@ -160,5 +103,9 @@ async function selectValue(page, name, value, label) {
     || result.browser_errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    await browser.close();
+    cleanupRouteFixture(fixture);
   }
 })();

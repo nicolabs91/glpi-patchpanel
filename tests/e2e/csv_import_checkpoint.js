@@ -1,4 +1,9 @@
 const { launchBrowser } = require('./helpers');
+const {
+  cleanupEndpointFixture,
+  createEndpointFixture,
+  purgePanel,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
@@ -27,6 +32,9 @@ async function uploadCsv(page, content, filename) {
 }
 
 (async () => {
+  const firstEndpoint = createEndpointFixture('CSV-A', { withUpstream: true });
+  const secondEndpoint = createEndpointFixture('CSV-B');
+  let panelId = 0;
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1700, height: 1200 } });
   const errors = [];
@@ -37,6 +45,7 @@ async function uploadCsv(page, content, filename) {
     }
   });
 
+  try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.fill('input[name="login_name"]', username);
   await page.fill('input[name="login_password"]', password);
@@ -51,14 +60,14 @@ async function uploadCsv(page, content, filename) {
   await page.fill('input[name="port_count"]', '2');
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
-  const panelId = Number(new URL(page.url()).searchParams.get('id'));
+  panelId = Number(new URL(page.url()).searchParams.get('id'));
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/csvimport.php`, {
     waitUntil: 'networkidle',
   });
   const duplicateHeaderCsv = [
     headers.replace('panel,port', 'panel,panel,port'),
-    `${panelName},${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
+    `${panelName},${panelName},1,CSV Port 01,reserved,fiber-mm,${firstEndpoint.socketId},${firstEndpoint.frontPortId},#0d6efd,#ffc107,0`,
   ].join('\n');
   await uploadCsv(page, duplicateHeaderCsv, 'duplicate-header.csv');
   const duplicateHeaderBody = await page.locator('body').innerText();
@@ -69,8 +78,8 @@ async function uploadCsv(page, content, filename) {
   });
   const invalidCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
-    `${panelName},2,CSV Port 02,active,copper,24,227,#198754,#dc3545,0`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,${firstEndpoint.socketId},${firstEndpoint.frontPortId},#0d6efd,#ffc107,0`,
+    `${panelName},2,CSV Port 02,active,copper,${firstEndpoint.socketId},${secondEndpoint.frontPortId},#198754,#dc3545,0`,
   ].join('\n');
   await uploadCsv(page, invalidCsv, 'invalid-duplicate.csv');
   const invalidBody = await page.locator('body').innerText();
@@ -81,8 +90,8 @@ async function uploadCsv(page, content, filename) {
   });
   const validCsv = [
     headers,
-    `${panelName},1,CSV Port 01,reserved,fiber-mm,24,225,#0d6efd,#ffc107,0`,
-    `${panelName},2,CSV Port 02,active,copper,25,227,#198754,#dc3545,0`,
+    `${panelName},1,CSV Port 01,reserved,fiber-mm,${firstEndpoint.socketId},${firstEndpoint.frontPortId},#0d6efd,#ffc107,0`,
+    `${panelName},2,CSV Port 02,active,copper,${secondEndpoint.socketId},${secondEndpoint.frontPortId},#198754,#dc3545,0`,
   ].join('\n');
   await uploadCsv(page, validCsv, 'valid-import.csv');
   const previewBody = await page.locator('body').innerText();
@@ -196,7 +205,8 @@ async function uploadCsv(page, content, filename) {
       invalidBody.includes('also used on CSV line 2') && invalidApplyButtons === 0,
     preview_ready_rows: readyRows,
     preview_has_changes:
-      previewBody.includes('CSV Port 01') && previewBody.includes('front: #225'),
+      previewBody.includes('CSV Port 01')
+      && previewBody.includes(`front: #${firstEndpoint.frontPortId}`),
     apply_message: appliedBody.includes('Imported 2 CSV rows in rollback batch'),
     batch,
     imported: {
@@ -206,9 +216,9 @@ async function uploadCsv(page, content, filename) {
       rear: imported.rear,
       front: imported.front,
       complete_route:
-        imported.route.includes('NLH-L1-K101-A')
-        && imported.route.includes('NLH-F01-IDF-B-SW01')
-        && imported.route.includes('NLH-MDF-FW01'),
+        imported.route.includes(firstEndpoint.names.endpoint)
+        && imported.route.includes(firstEndpoint.names.accessSwitch)
+        && imported.route.includes(firstEndpoint.names.firewall),
     },
     active_batch_blocks_panel_purge: panelStillExists,
     changed_port_blocks_rollback:
@@ -220,7 +230,6 @@ async function uploadCsv(page, content, filename) {
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
-  await browser.close();
 
   if (
     !result.duplicate_blocked
@@ -232,8 +241,8 @@ async function uploadCsv(page, content, filename) {
     || result.imported.label !== 'CSV Port 01'
     || result.imported.state !== 'reserved'
     || result.imported.media !== 'fiber-mm'
-    || result.imported.rear !== '24'
-    || result.imported.front !== '225'
+    || result.imported.rear !== String(firstEndpoint.socketId)
+    || result.imported.front !== String(firstEndpoint.frontPortId)
     || !result.imported.complete_route
     || !result.active_batch_blocks_panel_purge
     || !result.changed_port_blocks_rollback
@@ -248,5 +257,11 @@ async function uploadCsv(page, content, filename) {
     || result.browser_errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    await browser.close();
+    purgePanel(panelId);
+    cleanupEndpointFixture(firstEndpoint);
+    cleanupEndpointFixture(secondEndpoint);
   }
 })();

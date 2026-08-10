@@ -1,14 +1,23 @@
 const { execFileSync } = require('child_process');
 const { launchBrowser } = require('./helpers');
+const {
+  cleanupEndpointFixture,
+  cleanupRouteFixture,
+  createEndpointFixture,
+  createRouteFixture,
+  purgePanel,
+  queryDb,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-const TEST_SOCKET_ID = 254;
-const TEST_TERMINAL_PORT_ID = 219;
-const TEST_TERMINAL_ITEM_ID = 3;
-const TEST_FRONT_PORT_ID = 255;
-const TEST_FRONT_ITEM_ID = 22;
+let TEST_SOCKET_ID = 0;
+let TEST_TERMINAL_PORT_ID = 0;
+let TEST_TERMINAL_ITEM_ID = 0;
+let TEST_FRONT_PORT_ID = 0;
+let TEST_FRONT_ITEM_ID = 0;
+let DEMO = null;
 
 async function selectValue(page, name, value, label) {
   await page.locator(`select[name="${name}"]`).evaluate((element, option) => {
@@ -19,20 +28,6 @@ async function selectValue(page, name, value, label) {
     element.value = value;
     element.dispatchEvent(new Event('change', { bubbles: true }));
   }, { value, label });
-}
-
-function queryDb(sql) {
-  return execFileSync('docker', [
-    'exec',
-    'glpi-db',
-    'mariadb',
-    '-uglpi',
-    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
-    'glpi',
-    '-N',
-    '-e',
-    sql,
-  ], { encoding: 'utf8' }).trim();
 }
 
 function addNativeNetworkPortLink(firstPortId, secondPortId) {
@@ -66,35 +61,27 @@ echo $id;
 
 function resetAp001Route() {
   queryDb(
-    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
+    `UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = ${DEMO.endpointId}, networkports_id = ${DEMO.endpointPortId} WHERE id = ${DEMO.socketId}`
   );
   queryDb(
-    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
+    `DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (${DEMO.endpointPortId}, ${DEMO.frontPortId}, ${DEMO.shadowPortId}) OR networkports_id_2 IN (${DEMO.endpointPortId}, ${DEMO.frontPortId}, ${DEMO.shadowPortId})`
   );
   queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
+    `INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (${DEMO.frontPortId}, ${DEMO.shadowPortId})`
   );
   queryDb(
-    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
+    `DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = ${DEMO.socketId} AND plugin_patchpanel_panelports_id <> ${DEMO.panelPortId}`
   );
   queryDb(
-    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'rear'"
+    `DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = ${DEMO.panelPortId} AND side = 'rear'`
   );
   queryDb(
-    "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
+    `INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (${DEMO.panelPortId}, 'rear', 'Glpi\\\\Socket', ${DEMO.socketId}, 0, NULL, NULL, NOW(), NOW())`
   );
 }
 
 function restoreDemoNativeLinks() {
-  queryDb(
-    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224, 219, 228) OR networkports_id_2 IN (217, 224, 219, 228)"
-  );
-  queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
-  );
-  queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) VALUES (228, 219)"
-  );
+  resetAp001Route();
 }
 
 async function openTabByText(page, text) {
@@ -103,6 +90,15 @@ async function openTabByText(page, text) {
 }
 
 (async () => {
+  DEMO = createRouteFixture('LINK-DISCONNECT-DEMO');
+  const endpointFixture = createEndpointFixture('LINK-DISCONNECT');
+  TEST_SOCKET_ID = endpointFixture.socketId;
+  TEST_TERMINAL_PORT_ID = endpointFixture.endpointPortId;
+  TEST_TERMINAL_ITEM_ID = endpointFixture.endpointId;
+  TEST_FRONT_PORT_ID = endpointFixture.frontPortId;
+  TEST_FRONT_ITEM_ID = endpointFixture.accessSwitchId;
+  let panelId = 0;
+  let duplicatePanelId = 0;
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];
@@ -113,6 +109,7 @@ async function openTabByText(page, text) {
     }
   });
 
+  try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.fill('input[name="login_name"]', username);
   await page.fill('input[name="login_password"]', password);
@@ -123,12 +120,12 @@ async function openTabByText(page, text) {
   let ap001DeviceDisconnect = null;
   let ap001RearDisconnect = null;
   try {
-    await page.goto(`${baseUrl}/front/networkequipment.form.php?id=1`, {
+    await page.goto(`${baseUrl}/front/networkequipment.form.php?id=${DEMO.endpointId}`, {
       waitUntil: 'networkidle',
     });
     await openTabByText(page, /Patch panel routes/i);
     const ap001Card = page.locator('.patchpanel-endpoint-route')
-      .filter({ hasText: 'PP-L1-IDF-A' })
+      .filter({ hasText: DEMO.names.panel })
       .first();
     await ap001Card.waitFor({ state: 'visible' });
     const beforeText = await ap001Card.innerText();
@@ -138,10 +135,10 @@ async function openTabByText(page, text) {
     await ap001Card.locator('button[name="disconnect_socket_device"]').click();
     await page.waitForLoadState('networkidle');
     const after = queryDb(
-      "SELECT CONCAT(COALESCE(itemtype, ''), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = 86"
+      `SELECT CONCAT(COALESCE(itemtype, ''), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = ${DEMO.socketId}`
     ).split('|');
     ap001DeviceDisconnect = {
-      route_visible: beforeText.includes('NLH-R0101-TV01') && beforeText.includes('NLH-R0101-WA-TV01'),
+      route_visible: beforeText.includes(DEMO.names.endpoint) && beforeText.includes(DEMO.names.socket),
       connection_details:
         beforeText.includes('Connection details')
         && beforeText.includes('Rear permanent link')
@@ -158,30 +155,30 @@ async function openTabByText(page, text) {
 
   try {
     queryDb(
-      "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
+      `UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = ${DEMO.endpointId}, networkports_id = ${DEMO.endpointPortId} WHERE id = ${DEMO.socketId}`
     );
     queryDb(
-      "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'rear'"
+      `DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = ${DEMO.panelPortId} AND side = 'rear'`
     );
     queryDb(
-      "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
+      `INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (${DEMO.panelPortId}, 'rear', 'Glpi\\\\Socket', ${DEMO.socketId}, 0, NULL, NULL, NOW(), NOW())`
     );
 
-    await page.goto(`${baseUrl}/front/socket.form.php?id=86`, {
+    await page.goto(`${baseUrl}/front/socket.form.php?id=${DEMO.socketId}`, {
       waitUntil: 'networkidle',
     });
     await openTabByText(page, /Patch panel routes/i);
     const ap001RearCard = page.locator('.patchpanel-endpoint-route')
-      .filter({ hasText: 'PP-L1-IDF-A' })
+      .filter({ hasText: DEMO.names.panel })
       .first();
     await ap001RearCard.waitFor({ state: 'visible' });
     await ap001RearCard.locator('button[name="disconnect_endpoint"]').click();
     await page.waitForLoadState('networkidle');
     const afterSocket = queryDb(
-      "SELECT CONCAT(COALESCE(itemtype, ''), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = 86"
+      `SELECT CONCAT(COALESCE(itemtype, ''), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = ${DEMO.socketId}`
     ).split('|');
     const rearEndpointCount = queryDb(
-      "SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'rear'"
+      `SELECT COUNT(*) FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = ${DEMO.panelPortId} AND side = 'rear'`
     );
     ap001RearDisconnect = {
       rear_endpoint_count: rearEndpointCount,
@@ -201,7 +198,7 @@ async function openTabByText(page, text) {
   await page.fill('input[name="port_count"]', '1');
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
-  const panelId = Number(new URL(page.url()).searchParams.get('id'));
+  panelId = Number(new URL(page.url()).searchParams.get('id'));
 
   await openTabByText(page, /Visual panel/i);
   await page.locator('.patchpanel-port').first().waitFor({ state: 'visible' });
@@ -214,7 +211,7 @@ async function openTabByText(page, text) {
      WHERE networkports_id_1 = ${TEST_FRONT_PORT_ID}
         OR networkports_id_2 = ${TEST_FRONT_PORT_ID}`
   );
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, endpointFixture.names.frontPort);
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const shadowPortIdAfterFrontOnly = queryDb(
@@ -308,8 +305,8 @@ async function openTabByText(page, text) {
         OR networkports_id_2 IN (${TEST_TERMINAL_PORT_ID}, ${TEST_FRONT_PORT_ID})`
   );
 
-  await selectValue(page, 'rear_items_id', TEST_SOCKET_ID, '123');
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
+  await selectValue(page, 'rear_items_id', TEST_SOCKET_ID, endpointFixture.names.socket);
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, endpointFixture.names.frontPort);
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const terminalPortId = queryDb(`SELECT networkports_id FROM glpi_sockets WHERE id = ${TEST_SOCKET_ID}`);
@@ -390,7 +387,7 @@ async function openTabByText(page, text) {
          AND items_id = ${TEST_FRONT_PORT_ID}`
     ),
   };
-  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, 'NLH-F01-IDF-B-SW01 16');
+  await selectValue(page, 'front_items_id', TEST_FRONT_PORT_ID, endpointFixture.names.frontPort);
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const nativeLinkAfterNativeReconnect = queryDb(
@@ -412,7 +409,7 @@ async function openTabByText(page, text) {
   await page.fill('input[name="port_count"]', '1');
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
-  const duplicatePanelId = Number(new URL(page.url()).searchParams.get('id'));
+  duplicatePanelId = Number(new URL(page.url()).searchParams.get('id'));
   const duplicatePortId = Number(queryDb(
     `SELECT id FROM glpi_plugin_patchpanel_panelports WHERE plugin_patchpanel_panels_id = ${duplicatePanelId} LIMIT 1`
   ));
@@ -560,7 +557,6 @@ async function openTabByText(page, text) {
   };
   console.log(JSON.stringify(result, null, 2));
   restoreDemoNativeLinks();
-  await browser.close();
 
   if (
     !result.socket_actions.side
@@ -617,5 +613,12 @@ async function openTabByText(page, text) {
     || result.browser_errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    await browser.close();
+    purgePanel(duplicatePanelId);
+    purgePanel(panelId);
+    cleanupEndpointFixture(endpointFixture);
+    cleanupRouteFixture(DEMO);
   }
 })();

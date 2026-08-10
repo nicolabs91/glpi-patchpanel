@@ -2,12 +2,49 @@
 
 ## Unreleased
 
+- Show hotel access-point routes with the unique device name followed by the
+  functional port label, for example `HTL-AP-L2-16 · LAN`, and migrate the
+  generated topology away from the repetitive `eth0` label.
+- Reject and roll back invalid GLPI `Connected to` relations between PatchPanel shadow ports or through a deleted parent panel, and report legacy occurrences in Health.
+- Release the managed `Connected to` relation and front endpoint when linked
+  network equipment or its network port is moved to the trash. Restoring the
+  object does not silently recreate the old physical connection; legacy stale
+  endpoints are shown as broken routes and reported by Health.
+- Apply the same fail-closed lifecycle to every GLPI network-port owner type,
+  reject ports whose owner is deleted or missing, clear all connections when
+  a patch panel is trashed, and remove rear endpoints when their GLPI socket is
+  purged. Restores never recreate removed physical cabling.
+
 - Added a dedicated symmetric model for permanent links between patch-panel
   ports, including validation, migration, route traversal, audit, health,
   cleanup and rollback-safe lifecycle coverage.
 - Kept the rear-side editor compact: selecting another patch panel adds only
   the linked-port field. Length, cable color, cable label, media type and link
   comments are deliberately not exposed there.
+- Extended panel-to-panel routes through the peer port's front connection, so
+  MER/SER backbone paths resolve in the correct direction from either end.
+- Fixed visual panel status calculation for panel-to-panel links: a rear-only
+  backbone is shown as not connected, and both ends become connected only when
+  each linked port has a valid front connection.
+- Selecting a rear patch-panel peer now automatically selects the matching
+  connection type, so saving the compact form creates the intended link.
+- Prevented panel downsizing when an out-of-range port still has an active
+  panel-to-panel rear link.
+- Removed every link row touching a purged or disconnected panel port,
+  including duplicate legacy or corrupted rows.
+- Enforced item-level visibility checks on the panel-layout and socket-device
+  JSON endpoints.
+- Expanded the browser regression flow to cover link creation, reload,
+  reassignment, mirrored display, disconnection and stale-script fallback in
+  Chromium and Firefox.
+- Made reciprocal-endpoint migration fail closed: occupied rear sides and
+  failed canonical writes preserve the recoverable source rows instead of
+  creating duplicate active links or losing the relation.
+- Rejected panel-to-panel links through deleted parent panels and added a
+  matching health check plus regression checkpoint.
+- Replaced fixed demo-database IDs, names and shared rack positions in the
+  browser suite with unique self-cleaning endpoint, route and rack fixtures,
+  making the complete Chromium and Firefox suites reliable release gates.
 
 ## 0.2.0 - 2026-07-23
 

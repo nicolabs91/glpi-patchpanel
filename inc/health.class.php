@@ -126,6 +126,20 @@ final class PluginPatchpanelHealth
                 __('Remove the orphan panel link or restore both linked panel ports.', 'patchpanel')
             ),
             self::countCheck(
+                __('Panel links attached to a deleted panel', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_panelportlinks l
+                 INNER JOIN glpi_plugin_patchpanel_panelports a ON a.id = l.panelports_id_a
+                 INNER JOIN glpi_plugin_patchpanel_panelports b ON b.id = l.panelports_id_b
+                 INNER JOIN glpi_plugin_patchpanel_panels pa
+                   ON pa.id = a.plugin_patchpanel_panels_id
+                 INNER JOIN glpi_plugin_patchpanel_panels pb
+                   ON pb.id = b.plugin_patchpanel_panels_id
+                 WHERE l.is_active = 1
+                   AND (pa.is_deleted <> 0 OR pb.is_deleted <> 0)",
+                __('Restore the parent panel or remove its active panel-to-panel link.', 'patchpanel')
+            ),
+            self::countCheck(
                 __('Self-linked or non-normalized panel links', 'patchpanel'),
                 "SELECT COUNT(*) AS count
                  FROM glpi_plugin_patchpanel_panelportlinks
@@ -223,6 +237,46 @@ final class PluginPatchpanelHealth
                    AND (np.id IS NULL OR np.is_deleted <> 0)",
                 __('Reconnect the front side to an existing GLPI network port or clear the endpoint.', 'patchpanel')
             ),
+            self::frontEndpointOwnerCheck(),
+            self::countCheck(
+                __('Front endpoints attached to a deleted panel', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_portendpoints e
+                 INNER JOIN glpi_plugin_patchpanel_panelports p
+                   ON p.id = e.plugin_patchpanel_panelports_id
+                 INNER JOIN glpi_plugin_patchpanel_panels pa
+                   ON pa.id = p.plugin_patchpanel_panels_id
+                 WHERE e.side = 'front'
+                   AND pa.is_deleted <> 0",
+                __('Restore the parent panel or remove the stale front endpoint.', 'patchpanel')
+            ),
+            self::countCheck(
+                __('Invalid native links involving PatchPanel ports', 'patchpanel'),
+                "SELECT COUNT(DISTINCT nn.id) AS count
+                 FROM glpi_networkports_networkports nn
+                 INNER JOIN glpi_networkports a ON a.id = nn.networkports_id_1
+                 INNER JOIN glpi_networkports b ON b.id = nn.networkports_id_2
+                 LEFT JOIN glpi_plugin_patchpanel_panelports ppa
+                   ON a.itemtype = 'PluginPatchpanelPanelPort' AND ppa.id = a.items_id
+                 LEFT JOIN glpi_plugin_patchpanel_panels pa
+                   ON pa.id = ppa.plugin_patchpanel_panels_id
+                 LEFT JOIN glpi_plugin_patchpanel_panelports ppb
+                   ON b.itemtype = 'PluginPatchpanelPanelPort' AND ppb.id = b.items_id
+                 LEFT JOIN glpi_plugin_patchpanel_panels pb
+                   ON pb.id = ppb.plugin_patchpanel_panels_id
+                 WHERE (a.itemtype = 'PluginPatchpanelPanelPort'
+                        OR b.itemtype = 'PluginPatchpanelPanelPort')
+                   AND (
+                     (a.itemtype = 'PluginPatchpanelPanelPort'
+                      AND b.itemtype = 'PluginPatchpanelPanelPort')
+                     OR a.is_deleted <> 0 OR b.is_deleted <> 0
+                     OR (a.itemtype = 'PluginPatchpanelPanelPort'
+                         AND (ppa.id IS NULL OR pa.id IS NULL OR pa.is_deleted <> 0))
+                     OR (b.itemtype = 'PluginPatchpanelPanelPort'
+                         AND (ppb.id IS NULL OR pb.id IS NULL OR pb.is_deleted <> 0))
+                   )",
+                __('Disconnect the invalid GLPI Connected to relation and reconnect only an active panel port to a real network port.', 'patchpanel')
+            ),
             self::countCheck(
                 __('Missing native network port links', 'patchpanel'),
                 "SELECT COUNT(*) AS count
@@ -307,6 +361,39 @@ final class PluginPatchpanelHealth
             'ok' => $count === 0,
             'result' => sprintf(__('%d found', 'patchpanel'), $count),
             'suggestion' => $count === 0 ? __('No action needed.', 'patchpanel') : $suggestion,
+        ];
+    }
+
+    private static function frontEndpointOwnerCheck(): array
+    {
+        global $DB;
+
+        $count = 0;
+        foreach ($DB->request([
+            'SELECT' => ['items_id'],
+            'FROM' => PluginPatchpanelPortEndpoint::getTable(),
+            'WHERE' => [
+                'side' => PluginPatchpanelPortEndpoint::FRONT,
+                'itemtype' => NetworkPort::class,
+            ],
+        ]) as $endpoint) {
+            $networkPort = new NetworkPort();
+            $networkPortId = (int) $endpoint['items_id'];
+            if (
+                $networkPort->getFromDB($networkPortId)
+                && (int) ($networkPort->fields['is_deleted'] ?? 0) === 0
+                && !PluginPatchpanelPortEndpoint::isUsableFrontNetworkPortId($networkPortId)
+            ) {
+                $count++;
+            }
+        }
+        return [
+            'label' => __('Front endpoints owned by deleted or missing items', 'patchpanel'),
+            'ok' => $count === 0,
+            'result' => sprintf(__('%d found', 'patchpanel'), $count),
+            'suggestion' => $count === 0
+                ? __('No action needed.', 'patchpanel')
+                : __('Remove the stale endpoint, then connect a port owned by an active GLPI item.', 'patchpanel'),
         ];
     }
 

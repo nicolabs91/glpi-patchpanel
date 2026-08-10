@@ -121,11 +121,25 @@ class PluginPatchpanelPanel extends CommonDBTM
             return true;
         }
 
-        $sql = 'SELECT MAX(p.number) AS highest_connected
-                FROM ' . PluginPatchpanelPanelPort::getTable() . ' p
-                INNER JOIN ' . PluginPatchpanelPortEndpoint::getTable() . ' e
-                    ON e.plugin_patchpanel_panelports_id = p.id
-                WHERE p.plugin_patchpanel_panels_id = ' . (int) $this->getID();
+        $portTable = PluginPatchpanelPanelPort::getTable();
+        $endpointTable = PluginPatchpanelPortEndpoint::getTable();
+        $linkTable = PluginPatchpanelPanelPortLink::getTable();
+        $sql = "SELECT MAX(p.number) AS highest_connected
+                FROM `$portTable` p
+                WHERE p.plugin_patchpanel_panels_id = " . (int) $this->getID() . "
+                  AND (
+                    EXISTS (
+                      SELECT 1
+                      FROM `$endpointTable` e
+                      WHERE e.plugin_patchpanel_panelports_id = p.id
+                    )
+                    OR EXISTS (
+                      SELECT 1
+                      FROM `$linkTable` l
+                      WHERE l.is_active = 1
+                        AND (l.panelports_id_a = p.id OR l.panelports_id_b = p.id)
+                    )
+                  )";
         $result = $DB->doQuery($sql);
         $row = $result ? $result->fetch_assoc() : null;
         return (int) ($row['highest_connected'] ?? 0) <= $portCount;
@@ -140,6 +154,9 @@ class PluginPatchpanelPanel extends CommonDBTM
     public function post_updateItem($history = true): void
     {
         parent::post_updateItem($history);
+        if ((int) ($this->fields['is_deleted'] ?? 0) !== 0) {
+            PluginPatchpanelPortEndpoint::cleanupConnectionsForPanelSoftDelete((int) $this->getID());
+        }
         PluginPatchpanelPanelPort::synchronizeForPanel(
             $this,
             in_array('media', $this->updates, true)

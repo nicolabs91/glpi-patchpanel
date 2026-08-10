@@ -126,7 +126,10 @@ Link data for all visible tiles is fetched set-wise.
 ## Route traversal
 
 A panel-to-panel cable is an explicit route hop. Traversal can enter from
-either endpoint and continue through the peer port. Stable visited keys are
+either endpoint and continue through the peer port and its front connection.
+The local front connection is rendered before the local panel, while upstream
+discovery starts at the peer front connection. Reversing the starting port
+reverses this order without changing the stored link. Stable visited keys are
 used:
 
 - `panelport:<id>`
@@ -211,6 +214,11 @@ whose `itemtype` is `PluginPatchpanelPanelPort`. The additive migration:
 4. records/report conflicts instead of overwriting data;
 5. removes migrated experimental rows only after the link insert succeeds;
 6. remains safe to run repeatedly.
+
+If either port is already occupied by another active canonical link or a rear
+socket, migration leaves both experimental rows untouched and logs the
+conflict. Failed inserts, activation updates and endpoint cleanup all roll back
+without discarding the recoverable source relation.
 
 No released version depends on those experimental rows, but handling them
 protects the active local test installation.

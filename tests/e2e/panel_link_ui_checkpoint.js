@@ -88,6 +88,77 @@ function findFreePanelPortId() {
   const selectedPeerIsSelf = await page.locator(
     `select[name="rear_panelport_id"] option[value="${panelPortId}"]`,
   ).count();
+  const selectablePeerIds = (await page.locator(
+    'select[name="rear_panelport_id"] option:not([value=""])',
+  ).evaluateAll(options => options.map(option => Number(option.value))))
+    .filter(id => id > 0);
+  const [peerPortId, replacementPeerPortId] = selectablePeerIds;
+  if (!peerPortId || !replacementPeerPortId) {
+    throw new Error('Two selectable peer ports are required for create/reassign/disconnect checks');
+  }
+  await page.selectOption('select[name="rear_panelport_id"]', String(peerPortId));
+  const inferredRearType = await page.locator('select[name="rear_endpoint_type"]').inputValue();
+  // Simulate an older cached script that did not synchronize the connection
+  // type. The server must still honor an unambiguous selected peer.
+  await page.locator('select[name="rear_endpoint_type"]').evaluate(field => {
+    field.value = 'none';
+  });
+  const submittedRearType = await page.locator('select[name="rear_endpoint_type"]').inputValue();
+  await page.click('button[name="update"]');
+  await page.waitForLoadState('networkidle');
+  const savedLinkCount = Number(queryDb(`
+    SELECT COUNT(*)
+    FROM glpi_plugin_patchpanel_panelportlinks
+    WHERE is_active = 1
+      AND panelports_id_a = LEAST(${panelPortId}, ${peerPortId})
+      AND panelports_id_b = GREATEST(${panelPortId}, ${peerPortId})
+  `));
+
+  await page.goto(
+    `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${panelPortId}`,
+    { waitUntil: 'networkidle' },
+  );
+  const reloadedPeerPortId = Number(
+    await page.locator('select[name="rear_panelport_id"]').inputValue(),
+  );
+  await page.selectOption(
+    'select[name="rear_panelport_id"]',
+    String(replacementPeerPortId),
+  );
+  await page.click('button[name="update"]');
+  await page.waitForLoadState('networkidle');
+  const oldLinkCountAfterReassign = Number(queryDb(`
+    SELECT COUNT(*)
+    FROM glpi_plugin_patchpanel_panelportlinks
+    WHERE is_active = 1
+      AND panelports_id_a = LEAST(${panelPortId}, ${peerPortId})
+      AND panelports_id_b = GREATEST(${panelPortId}, ${peerPortId})
+  `));
+  const replacementLinkCount = Number(queryDb(`
+    SELECT COUNT(*)
+    FROM glpi_plugin_patchpanel_panelportlinks
+    WHERE is_active = 1
+      AND panelports_id_a = LEAST(${panelPortId}, ${replacementPeerPortId})
+      AND panelports_id_b = GREATEST(${panelPortId}, ${replacementPeerPortId})
+  `));
+
+  await page.goto(
+    `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${replacementPeerPortId}`,
+    { waitUntil: 'networkidle' },
+  );
+  const mirroredPeerPortId = Number(
+    await page.locator('select[name="rear_panelport_id"]').inputValue(),
+  );
+  await page.selectOption('select[name="rear_panelport_id"]', '');
+  await page.selectOption('select[name="rear_endpoint_type"]', 'none');
+  await page.click('button[name="update"]');
+  await page.waitForLoadState('networkidle');
+  const remainingLinkCount = Number(queryDb(`
+    SELECT COUNT(*)
+    FROM glpi_plugin_patchpanel_panelportlinks
+    WHERE panelports_id_a IN (${panelPortId}, ${replacementPeerPortId})
+       OR panelports_id_b IN (${panelPortId}, ${replacementPeerPortId})
+  `));
 
   const result = {
     panel_port_id: panelPortId,
@@ -95,9 +166,24 @@ function findFreePanelPortId() {
     selectable_peer_options: peerOptions,
     metadata_fields: metadataFields,
     self_option_count: selectedPeerIsSelf,
+    selected_peer_port_id: peerPortId,
+    replacement_peer_port_id: replacementPeerPortId,
+    inferred_rear_type: inferredRearType,
+    submitted_rear_type: submittedRearType,
+    saved_link_count: savedLinkCount,
+    reloaded_peer_port_id: reloadedPeerPortId,
+    old_link_count_after_reassign: oldLinkCountAfterReassign,
+    replacement_link_count: replacementLinkCount,
+    mirrored_peer_port_id: mirroredPeerPortId,
+    remaining_link_count_after_disconnect: remainingLinkCount,
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
+  queryDb(`
+    DELETE FROM glpi_plugin_patchpanel_panelportlinks
+    WHERE panelports_id_a IN (${panelPortId}, ${peerPortId}, ${replacementPeerPortId})
+       OR panelports_id_b IN (${panelPortId}, ${peerPortId}, ${replacementPeerPortId})
+  `);
   await browser.close();
 
   if (
@@ -105,6 +191,15 @@ function findFreePanelPortId() {
     || peerOptions < 2
     || metadataFields !== 0
     || selectedPeerIsSelf !== 0
+    || !peerPortId
+    || inferredRearType !== 'panel_port'
+    || submittedRearType !== 'none'
+    || savedLinkCount !== 1
+    || reloadedPeerPortId !== peerPortId
+    || oldLinkCountAfterReassign !== 0
+    || replacementLinkCount !== 1
+    || mirroredPeerPortId !== panelPortId
+    || remainingLinkCount !== 0
     || errors.length
   ) {
     process.exitCode = 1;

@@ -1,5 +1,9 @@
 const { launchBrowser } = require('./helpers');
 const { execFileSync } = require('child_process');
+const {
+  cleanupEndpointFixture,
+  createEndpointFixture,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
@@ -56,6 +60,9 @@ if (!$panel->update(['id' => ${Number(panelId)}, 'port_count' => ${Number(portCo
 }
 
 function purgePanel(panelId) {
+  if (!panelId || queryDb(`SELECT COUNT(*) FROM glpi_plugin_patchpanel_panels WHERE id = ${Number(panelId)}`) === '0') {
+    return;
+  }
   const code = `
 chdir('/var/www/glpi');
 require_once 'src/Glpi/Application/ResourcesChecker.php';
@@ -85,6 +92,9 @@ async function selectValue(page, name, value, label) {
 }
 
 (async () => {
+  const fixture = createEndpointFixture('SECOND-CHECKPOINT');
+  let panelId = 0;
+  let overridePanelId = 0;
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];
@@ -95,14 +105,28 @@ async function selectValue(page, name, value, label) {
     }
   });
 
+  try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.fill('input[name="login_name"]', username);
   await page.fill('input[name="login_password"]', password);
   await page.click('button[type="submit"], input[type="submit"]');
   await page.waitForLoadState('networkidle');
 
+  await page.goto(`${baseUrl}/plugins/patchpanel/front/panelmodel.php`, {
+    waitUntil: 'networkidle',
+  });
+  const copperModelHref = await page.locator('a')
+    .filter({ hasText: /48-port copper/i })
+    .first()
+    .getAttribute('href');
+  const copperModelId = copperModelHref
+    ? new URL(copperModelHref, baseUrl).searchParams.get('id')
+    : null;
+  if (!copperModelId) {
+    throw new Error('48-port copper model is missing');
+  }
   const modelResponse = await page.goto(
-    `${baseUrl}/plugins/patchpanel/front/panelmodel.form.php?id=2`,
+    `${baseUrl}/plugins/patchpanel/front/panelmodel.form.php?id=${copperModelId}`,
     { waitUntil: 'networkidle' }
   );
   const modelBody = await page.locator('body').innerText();
@@ -112,11 +136,11 @@ async function selectValue(page, name, value, label) {
   });
   const panelName = `PP-V2-MODEL-${Date.now()}`;
   await page.fill('input[name="name"]', panelName);
-  await selectValue(page, 'plugin_patchpanel_panelmodels_id', 2, '48-port copper, 2U');
+  await selectValue(page, 'plugin_patchpanel_panelmodels_id', copperModelId, '48-port copper, 2U');
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
 
-  const panelId = Number(new URL(page.url()).searchParams.get('id'));
+  panelId = Number(new URL(page.url()).searchParams.get('id'));
   if (!panelId) {
     throw new Error(`Model panel creation failed: ${page.url()}`);
   }
@@ -136,11 +160,8 @@ async function selectValue(page, name, value, label) {
   await page.fill('input[name="label"]', 'Rack A-03');
   await selectValue(page, 'operational_state', 'reserved', 'Reserved');
   await selectValue(page, 'media', 'fiber-mm', 'Multimode fiber');
-  queryDb(
-    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 278, networkports_id = 332 WHERE id = 299"
-  );
-  await selectValue(page, 'rear_items_id', 299, 'NLH-R0201-WA01 - Room 0201 wall outlet');
-  await selectValue(page, 'front_items_id', 227, 'NLH-F01-IDF-B-SW01 02');
+  await selectValue(page, 'rear_items_id', fixture.socketId, fixture.names.socket);
+  await selectValue(page, 'front_items_id', fixture.frontPortId, fixture.names.frontPort);
   await page.locator('button[name="update"]').click();
   await page.waitForLoadState('networkidle');
 
@@ -195,7 +216,7 @@ async function selectValue(page, name, value, label) {
   await page.fill('input[name="port_count"]', '12');
   await page.locator('button[name="add"], input[name="add"]').click();
   await page.waitForLoadState('networkidle');
-  const overridePanelId = Number(new URL(page.url()).searchParams.get('id'));
+  overridePanelId = Number(new URL(page.url()).searchParams.get('id'));
 
   await page.goto(`${baseUrl}/plugins/patchpanel/front/panelmodel.php`, {
     waitUntil: 'networkidle',
@@ -238,7 +259,7 @@ async function selectValue(page, name, value, label) {
   const lastPortHref = await page.locator('.patchpanel-port').last().getAttribute('href');
   const lastPortId = Number(new URL(lastPortHref, baseUrl).searchParams.get('id'));
   await page.goto(new URL(lastPortHref, baseUrl).toString(), { waitUntil: 'networkidle' });
-  await selectValue(page, 'front_items_id', 255, 'NLH-F01-IDF-B-SW01 16');
+  await selectValue(page, 'front_items_id', fixture.frontPortId, fixture.names.frontPort);
   await page.locator('button[name="update"], input[name="update"]').click();
   await page.waitForLoadState('networkidle');
   const shadowPortId = queryDb(
@@ -278,8 +299,8 @@ async function selectValue(page, name, value, label) {
     },
     port_result: port3,
     route_preserved:
-      routeBody.includes('NLH-R0201-WA01')
-      && routeBody.includes('NLH-F01-IDF-B-SW01'),
+      routeBody.includes(fixture.names.socket)
+      && routeBody.includes(fixture.names.accessSwitch),
     media_after_panel_rename: mediaAfterPanelRename,
     bulk_ui_removed: !visualBody.includes('Bulk port management'),
     bulk_route_status: bulkRouteResponse.status(),
@@ -291,7 +312,6 @@ async function selectValue(page, name, value, label) {
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
-  await browser.close();
 
   if (
     result.model_page_status !== 200
@@ -303,8 +323,8 @@ async function selectValue(page, name, value, label) {
     || result.port_result.label !== 'Rack A-03'
     || result.port_result.state !== 'reserved'
     || result.port_result.media !== 'fiber-mm'
-    || result.port_result.rear !== '299'
-    || result.port_result.front !== '227'
+    || result.port_result.rear !== String(fixture.socketId)
+    || result.port_result.front !== String(fixture.frontPortId)
     || !result.route_preserved
     || result.media_after_panel_rename !== 'fiber-mm'
     || !result.bulk_ui_removed
@@ -320,5 +340,11 @@ async function selectValue(page, name, value, label) {
     || result.browser_errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    await browser.close();
+    purgePanel(panelId);
+    purgePanel(overridePanelId);
+    cleanupEndpointFixture(fixture);
   }
 })();

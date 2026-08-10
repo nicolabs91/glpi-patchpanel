@@ -131,6 +131,11 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
             $port->check($candidateId, UPDATE);
             $panel = new PluginPatchpanelPanel();
             $panel->check((int) $port->fields['plugin_patchpanel_panels_id'], UPDATE);
+            if ((int) ($panel->fields['is_deleted'] ?? 0) !== 0) {
+                throw new DomainException(
+                    __('A panel-to-panel link cannot use a deleted patch panel.', 'patchpanel')
+                );
+            }
         }
 
         [$portIdA, $portIdB] = self::normalizePair($portId, $peerPortId);
@@ -200,16 +205,28 @@ final class PluginPatchpanelPanelPortLink extends CommonDBTM
     {
         global $DB;
 
-        $link = self::getForPanelPort($portId, false);
-        if (!$link) {
+        $links = iterator_to_array($DB->request([
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'OR' => [
+                    'panelports_id_a' => $portId,
+                    'panelports_id_b' => $portId,
+                ],
+            ],
+            'ORDER' => ['id ASC'],
+        ]));
+        if (!$links) {
             return true;
         }
-        $before = self::getAuditSnapshot($link);
-        $deleted = $DB->delete(self::getTable(), ['id' => (int) $link['id']]);
-        if ($deleted) {
+
+        foreach ($links as $link) {
+            $before = self::getAuditSnapshot($link);
+            if (!$DB->delete(self::getTable(), ['id' => (int) $link['id']])) {
+                return false;
+            }
             self::recordAudit('panel_link_delete', $before, []);
         }
-        return $deleted;
+        return true;
     }
 
     private static function getAuditSnapshot(array $link): array

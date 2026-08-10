@@ -249,10 +249,50 @@ SQL,
                 continue;
             }
 
+            $conflictingLink = false;
+            foreach ($DB->request([
+                'SELECT' => ['id', 'panelports_id_a', 'panelports_id_b'],
+                'FROM' => $linkTable,
+                'WHERE' => [
+                    'is_active' => 1,
+                    'OR' => [
+                        'panelports_id_a' => [$portIdA, $portIdB],
+                        'panelports_id_b' => [$portIdA, $portIdB],
+                    ],
+                ],
+            ]) as $activeLink) {
+                if (
+                    (int) $activeLink['panelports_id_a'] !== $portIdA
+                    || (int) $activeLink['panelports_id_b'] !== $portIdB
+                ) {
+                    $conflictingLink = true;
+                    break;
+                }
+            }
+            $rearSocketConflict = $DB->request([
+                'SELECT' => ['id'],
+                'FROM' => $endpointTable,
+                'WHERE' => [
+                    'plugin_patchpanel_panelports_id' => [$portIdA, $portIdB],
+                    'side' => PluginPatchpanelPortEndpoint::REAR,
+                    'itemtype' => \Glpi\Socket::class,
+                    'NOT' => ['items_id' => 0],
+                ],
+                'LIMIT' => 1,
+            ])->current();
+            if ($conflictingLink || $rearSocketConflict) {
+                Toolbox::logInFile(
+                    'php-errors',
+                    'PatchPanel left experimental panel-link endpoints unchanged for ports ' .
+                    $portIdA . ' and ' . $portIdB . " because a rear-side conflict exists.\n"
+                );
+                continue;
+            }
+
             $DB->beginTransaction();
             try {
                 $existing = $DB->request([
-                    'SELECT' => ['id'],
+                    'SELECT' => ['id', 'is_active'],
                     'FROM' => $linkTable,
                     'WHERE' => [
                         'panelports_id_a' => $portIdA,
@@ -262,21 +302,40 @@ SQL,
                 ])->current();
                 if (!$existing) {
                     $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
-                    $DB->insert($linkTable, [
+                    if (!$DB->insert($linkTable, [
                         'panelports_id_a' => $portIdA,
                         'panelports_id_b' => $portIdB,
                         'media_type' => 'other',
                         'is_active' => 1,
                         'date_creation' => $now,
                         'date_mod' => $now,
-                    ]);
+                    ])) {
+                        throw new RuntimeException('Canonical panel-link insert failed.');
+                    }
+                } elseif ((int) ($existing['is_active'] ?? 0) !== 1) {
+                    if (!$DB->update($linkTable, [
+                        'is_active' => 1,
+                        'date_mod' => $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s'),
+                    ], ['id' => (int) $existing['id']])) {
+                        throw new RuntimeException('Canonical panel-link activation failed.');
+                    }
                 }
-                $DB->delete($endpointTable, [
+                if (!$DB->delete($endpointTable, [
                     'id' => [
                         (int) $experimental[$sourceId]['id'],
                         (int) $experimental[$targetId]['id'],
                     ],
-                ]);
+                ])) {
+                    throw new RuntimeException('Experimental endpoint cleanup failed.');
+                }
+                if (countElementsInTable($endpointTable, [
+                    'id' => [
+                        (int) $experimental[$sourceId]['id'],
+                        (int) $experimental[$targetId]['id'],
+                    ],
+                ]) !== 0) {
+                    throw new RuntimeException('Experimental endpoints remained after cleanup.');
+                }
                 $DB->commit();
             } catch (Throwable $e) {
                 $DB->rollBack();

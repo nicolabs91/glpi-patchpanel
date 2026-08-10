@@ -25,6 +25,7 @@ final class PluginPatchpanelRoute extends CommonGLPI
             'panel_link' => null,
             'peer_panel' => null,
             'peer_port' => null,
+            'peer_front' => null,
             'terminal' => null,
             'upstream' => [],
             'has_broken_reference' => false,
@@ -74,6 +75,19 @@ final class PluginPatchpanelRoute extends CommonGLPI
                 } else {
                     $result['has_broken_reference'] = true;
                 }
+                $peerEndpoints = PluginPatchpanelPortEndpoint::getForPort($peerPortId);
+                $peerFront = $peerEndpoints[PluginPatchpanelPortEndpoint::FRONT] ?? null;
+                if ($peerFront) {
+                    $result['peer_front'] = self::stepForReference(
+                        (string) $peerFront['itemtype'],
+                        (int) $peerFront['items_id']
+                    );
+                    $result['peer_front']['cable_color'] = $peerFront['cable_color'];
+                    $result['peer_front']['cables_id'] = (int) $peerFront['cables_id'];
+                    if ($result['peer_front']['broken']) {
+                        $result['has_broken_reference'] = true;
+                    }
+                }
             } else {
                 $result['peer_port'] = self::brokenStep(
                     PluginPatchpanelPanelPort::class,
@@ -98,8 +112,11 @@ final class PluginPatchpanelRoute extends CommonGLPI
 
         $result['terminal'] = self::terminalFromRearEndpoint($endpoints);
 
-        if (($endpoints[PluginPatchpanelPortEndpoint::FRONT]['itemtype'] ?? '') === NetworkPort::class) {
-            $frontPortId = (int) $endpoints[PluginPatchpanelPortEndpoint::FRONT]['items_id'];
+        $upstreamFront = $panelLink && $result['peer_front']
+            ? $result['peer_front']
+            : $result['front'];
+        if (($upstreamFront['type'] ?? '') === NetworkPort::class && empty($upstreamFront['broken'])) {
+            $frontPortId = (int) $upstreamFront['id'];
             $frontPort = new NetworkPort();
             if ($frontPort->getFromDB($frontPortId)) {
                 if ($result['terminal'] === null && $result['rear'] === null) {
@@ -167,6 +184,9 @@ final class PluginPatchpanelRoute extends CommonGLPI
         if ($item instanceof NetworkPort && (int) ($item->fields['is_deleted'] ?? 0) !== 0) {
             return self::$referenceStepCache[$cacheKey] = self::brokenStep($itemtype, $itemsId);
         }
+        if ($item instanceof NetworkPort && !PluginPatchpanelPortEndpoint::isUsableFrontNetworkPortId($itemsId)) {
+            return self::$referenceStepCache[$cacheKey] = self::brokenStep($itemtype, $itemsId);
+        }
         return self::$referenceStepCache[$cacheKey] = self::stepForItem($item);
     }
 
@@ -206,9 +226,13 @@ final class PluginPatchpanelRoute extends CommonGLPI
             return self::$ownerStepCache[$cacheKey] = null;
         }
         $owner = new $type();
-        return self::$ownerStepCache[$cacheKey] = $owner->getFromDB($id) && $owner->canViewItem()
-            ? self::stepForItem($owner)
-            : null;
+        if (!$owner->getFromDB($id) || !$owner->canViewItem()) {
+            return self::$ownerStepCache[$cacheKey] = null;
+        }
+        if (array_key_exists('is_deleted', $owner->fields) && (int) $owner->fields['is_deleted'] !== 0) {
+            return self::$ownerStepCache[$cacheKey] = self::brokenStep($type, $id);
+        }
+        return self::$ownerStepCache[$cacheKey] = self::stepForItem($owner);
     }
 
     private static function stepWithPortDetail(array $ownerStep, array $portStep): array
@@ -435,6 +459,10 @@ final class PluginPatchpanelRoute extends CommonGLPI
 
     public static function getSteps(array $route): array
     {
+        if ($route['panel_link'] ?? null) {
+            return self::getPanelLinkSteps($route);
+        }
+
         $steps = [];
         if ($route['terminal']) {
             if (!empty($route['terminal']['port'])) {
@@ -469,7 +497,41 @@ final class PluginPatchpanelRoute extends CommonGLPI
             $steps[] = self::withZone($front, self::zoneForOwnerStep($front, 'access'));
         }
 
-        $upstream = array_values($route['upstream']);
+        return array_merge($steps, self::getUpstreamSteps($route['upstream']));
+    }
+
+    private static function getPanelLinkSteps(array $route): array
+    {
+        $steps = [];
+        if ($route['front']) {
+            $steps[] = self::withZone(
+                self::stepForNetworkPortWithOwner($route['front']),
+                'access'
+            );
+        }
+        foreach ([
+            ['panel', 'panel'],
+            ['port', 'panel'],
+            ['panel_link', 'connection'],
+            ['peer_panel', 'panel'],
+            ['peer_port', 'panel'],
+        ] as [$key, $zone]) {
+            if ($route[$key] ?? null) {
+                $steps[] = self::withZone($route[$key], $zone);
+            }
+        }
+        if ($route['peer_front'] ?? null) {
+            $peerFront = self::stepForNetworkPortWithOwner($route['peer_front']);
+            $steps[] = self::withZone($peerFront, self::zoneForOwnerStep($peerFront, 'access'));
+        }
+
+        return array_merge($steps, self::getUpstreamSteps($route['upstream']));
+    }
+
+    private static function getUpstreamSteps(array $upstream): array
+    {
+        $steps = [];
+        $upstream = array_values($upstream);
         $last = $upstream ? $upstream[count($upstream) - 1] : null;
         $endsAtGateway = $last
             && ($last['type'] ?? '') === NetworkEquipment::class

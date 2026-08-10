@@ -1,70 +1,16 @@
 const { launchBrowser } = require('./helpers');
-const { execFileSync } = require('child_process');
+const {
+  cleanupRouteFixture,
+  createRouteFixture,
+  queryDb,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
 
-function queryDb(sql) {
-  return execFileSync('docker', [
-    'exec',
-    'glpi-db',
-    'mariadb',
-    '-uglpi',
-    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
-    'glpi',
-    '-N',
-    '-e',
-    sql,
-  ], { encoding: 'utf8' }).trim();
-}
-
-function requireFixture(sql, description) {
-  if (queryDb(sql) !== '1') {
-    throw new Error(`Missing E2E fixture: ${description}`);
-  }
-}
-
-function resetAp001Route() {
-  requireFixture(
-    'SELECT COUNT(*) FROM glpi_plugin_patchpanel_panelports WHERE id = 2605',
-    'panel port 2605',
-  );
-  requireFixture(
-    'SELECT COUNT(*) FROM glpi_networkports WHERE id = 224 AND is_deleted = 0',
-    'front network port 224',
-  );
-  requireFixture(
-    'SELECT COUNT(*) FROM glpi_sockets WHERE id = 86',
-    'socket 86',
-  );
-  queryDb(
-    "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 217 WHERE id = 86"
-  );
-  queryDb(
-    "DELETE FROM glpi_networkports_networkports WHERE networkports_id_1 IN (217, 224) OR networkports_id_2 IN (217, 224)"
-  );
-  queryDb(
-    "INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2) SELECT 224, id FROM glpi_networkports WHERE itemtype = 'PluginPatchpanelPanelPort' AND items_id = 2605 AND is_deleted = 0 LIMIT 1"
-  );
-  queryDb(
-    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE itemtype = 'Glpi\\\\Socket' AND items_id = 86 AND plugin_patchpanel_panelports_id <> 2605"
-  );
-  queryDb(
-    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'rear'"
-  );
-  queryDb(
-    "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'rear', 'Glpi\\\\Socket', 86, 0, NULL, NULL, NOW(), NOW())"
-  );
-  queryDb(
-    "DELETE FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'front'"
-  );
-  queryDb(
-    "INSERT INTO glpi_plugin_patchpanel_portendpoints (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id, cable_color, cable_label, date_mod, date_creation) VALUES (2605, 'front', 'NetworkPort', 224, 0, NULL, NULL, NOW(), NOW())"
-  );
-}
-
 (async () => {
+  const fixture = createRouteFixture('SOCKET-ENDPOINT');
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];
@@ -77,15 +23,13 @@ function resetAp001Route() {
   });
 
   try {
-    resetAp001Route();
-
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
     await page.fill('input[name="login_name"]', username);
     await page.fill('input[name="login_password"]', password);
     await page.click('button[type="submit"], input[type="submit"]');
     await page.waitForLoadState('networkidle');
 
-    await page.goto(`${baseUrl}/front/socket.form.php?id=86`, {
+    await page.goto(`${baseUrl}/front/socket.form.php?id=${fixture.socketId}`, {
       waitUntil: 'networkidle',
     });
     const socketSelection = {
@@ -101,7 +45,7 @@ function resetAp001Route() {
       .innerText();
 
     await page.goto(
-      `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=2605`,
+      `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${fixture.panelPortId}`,
       { waitUntil: 'networkidle' },
     );
     const connectedPortFormText = await page.locator('body').innerText();
@@ -117,17 +61,17 @@ function resetAp001Route() {
     );
 
     const nativeFrontPortId = queryDb(
-      "SELECT items_id FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = 2605 AND side = 'front' LIMIT 1"
+      `SELECT items_id FROM glpi_plugin_patchpanel_portendpoints WHERE plugin_patchpanel_panelports_id = ${fixture.panelPortId} AND side = 'front' LIMIT 1`
     );
     await page.goto(`${baseUrl}/front/networkport.form.php?id=${nativeFrontPortId}`, {
       waitUntil: 'networkidle',
     });
     const nativeConnectedPanelPortLinks = await page
-      .locator('a[href*="/plugins/patchpanel/front/panelport.form.php?id=2605"]')
+      .locator(`a[href*="/plugins/patchpanel/front/panelport.form.php?id=${fixture.panelPortId}"]`)
       .count();
     const nativeConnectedShadowPortLinks = await page
       .locator('a[href*="/front/networkport.form.php?id="]')
-      .filter({ hasText: /PP-L1-IDF-A.*Port 1/i })
+      .filter({ hasText: fixture.names.panel })
       .count();
     await page.goto(`${baseUrl}/front/networkport.form.php?id=${socketSelection.networkport}`, {
       waitUntil: 'networkidle',
@@ -138,16 +82,16 @@ function resetAp001Route() {
     const networkPortRouteCards = await page.locator('.patchpanel-endpoint-route').count();
 
     queryDb(
-      "UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = 0 WHERE id = 86"
+      `UPDATE glpi_sockets SET itemtype = 'NetworkEquipment', items_id = ${fixture.endpointId}, networkports_id = 0 WHERE id = ${fixture.socketId}`
     );
     await page.goto(
-      `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=2605`,
+      `${baseUrl}/plugins/patchpanel/front/panelport.form.php?id=${fixture.panelPortId}`,
       { waitUntil: 'networkidle' },
     );
     const disconnectedRouteText = await page.locator('.patchpanel-route').innerText();
     const disconnectedPortFormText = await page.locator('body').innerText();
 
-    await page.goto(`${baseUrl}/front/socket.form.php?id=86`, {
+    await page.goto(`${baseUrl}/front/socket.form.php?id=${fixture.socketId}`, {
       waitUntil: 'networkidle',
     });
     await page.locator('a, button').filter({ hasText: /Patch panel routes/i }).first().click();
@@ -157,7 +101,7 @@ function resetAp001Route() {
       .locator('button[name="disconnect_socket_device"]')
       .count();
 
-    await page.goto(`${baseUrl}/front/socket.form.php?id=86`, {
+    await page.goto(`${baseUrl}/front/socket.form.php?id=${fixture.socketId}`, {
       waitUntil: 'networkidle',
     });
     const socketMainTab = page.locator('a, button').filter({ hasText: /^Socket$/ }).first();
@@ -168,10 +112,10 @@ function resetAp001Route() {
     await page.locator('button[name="update"], input[name="update"], button:has-text("Save")').first().click();
     await page.waitForLoadState('networkidle');
     const cleanedSocketSelection = queryDb(
-      "SELECT CONCAT(COALESCE(itemtype, 'NULL'), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = 86"
+      `SELECT CONCAT(COALESCE(itemtype, 'NULL'), '|', items_id, '|', networkports_id) FROM glpi_sockets WHERE id = ${fixture.socketId}`
     );
 
-    await page.goto(`${baseUrl}/front/networkequipment.form.php?id=1`, {
+    await page.goto(`${baseUrl}/front/networkequipment.form.php?id=${fixture.endpointId}`, {
       waitUntil: 'networkidle',
     });
     await page.locator('a, button').filter({ hasText: /Patch panel routes/i }).first().click();
@@ -188,41 +132,41 @@ function resetAp001Route() {
       terminal_matches_socket:
         routeSteps[0]?.text === `${selectedSocketItemLabel.trim()} · ${selectedSocketPortLabel.trim()}`
         && routeSteps[0]?.href?.includes(`/front/networkequipment.form.php?id=${socketSelection.item}`)
-        && routeSteps[1]?.text.includes('NLH-R0101-WA-TV01')
-        && routeSteps[1]?.href?.includes('id=86'),
+        && routeSteps[1]?.text.includes(fixture.names.socket)
+        && routeSteps[1]?.href?.includes(`id=${fixture.socketId}`),
       port_form_uses_physical_route_for_terminal:
         !connectedPortFormText.includes('End device on endpoint')
         && !connectedPortFormText.includes('Disconnect end device from endpoint')
         && connectedPortFormText.includes('Physical route')
-        && connectedPortFormText.includes('NLH-R0101-TV01'),
+        && connectedPortFormText.includes(fixture.names.endpoint),
       connected_route_stops_at_access_switch:
-        connectedRouteFullText.includes('NLH-F01-IDF-A-SW01')
-        && connectedRouteFullText.includes('PP-L1-IDF-A')
-        && routeSteps[4]?.text.includes('NLH-F01-IDF-A-SW01')
+        connectedRouteFullText.includes(fixture.names.accessSwitch)
+        && connectedRouteFullText.includes(fixture.names.panel)
+        && routeSteps[4]?.text.includes(fixture.names.accessSwitch)
         && routeSteps[4]?.zone === 'access'
         && !routeSteps.slice(5).some(step =>
-          step.text.includes('NLH-R0101-TV01')
+          step.text.includes(fixture.names.endpoint)
           || step.href?.includes(`/front/networkequipment.form.php?id=${socketSelection.item}`)
         ),
       networkport_tab_matches_socket_route:
         networkPortRouteCards >= 1
-        && networkPortTabText.includes('PP-L1-IDF-A')
+        && networkPortTabText.includes(fixture.names.panel)
         && networkPortTabText.includes('Rear side: permanent cabling')
-        && networkPortTabText.includes('NLH-R0101-TV01')
-        && networkPortTabText.includes('NLH-R0101-WA-TV01')
+        && networkPortTabText.includes(fixture.names.endpoint)
+        && networkPortTabText.includes(fixture.names.socket)
         && networkPortTabText.includes('Connection details'),
       native_connected_to_hides_shadow_port:
         nativeConnectedPanelPortLinks === 1 && nativeConnectedShadowPortLinks === 0,
       disconnected_socket_ignored:
-        !disconnectedRouteText.includes('NLH-R0101-TV01')
-        && !disconnectedRouteText.includes('eth0 - NLH-R0101-TV01')
-        && disconnectedRouteText.includes('NLH-R0101-WA-TV01'),
+        !disconnectedRouteText.includes(fixture.names.endpoint)
+        && !disconnectedRouteText.includes(fixture.names.endpointPort)
+        && disconnectedRouteText.includes(fixture.names.socket),
       disconnected_port_form_ignores_stale_socket_device:
         !disconnectedPortFormText.includes('GLPI device selected only; no LAN port connected.')
         && !disconnectedPortFormText.includes('Clean up GLPI device selection')
         && disconnectedPortFormText.includes('Physical route')
-        && disconnectedPortFormText.includes('NLH-R0101-WA-TV01')
-        && !disconnectedRouteText.includes('NLH-R0101-TV01'),
+        && disconnectedPortFormText.includes(fixture.names.socket)
+        && !disconnectedRouteText.includes(fixture.names.endpoint),
       disconnected_socket_tab_warning:
         disconnectedSocketTabText.includes('GLPI device selected only; no LAN port connected.')
         && disconnectedSocketTabText.includes('Clean up GLPI device selection')
@@ -233,8 +177,6 @@ function resetAp001Route() {
       browser_errors: errors,
     };
     console.log(JSON.stringify(result, null, 2));
-
-    await browser.close();
 
     if (
       socketSelection.itemtype !== 'NetworkEquipment'
@@ -255,6 +197,7 @@ function resetAp001Route() {
       process.exitCode = 1;
     }
   } finally {
-    resetAp001Route();
+    await browser.close();
+    cleanupRouteFixture(fixture);
   }
 })();

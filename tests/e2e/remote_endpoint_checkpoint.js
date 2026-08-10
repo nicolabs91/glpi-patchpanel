@@ -1,13 +1,17 @@
 const { launchBrowser } = require('./helpers');
+const { createRouteFixture, cleanupRouteFixture } = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-const panelPortId = Number(process.env.GLPI_PANEL_PORT_ID || 31);
-const panelId = Number(process.env.GLPI_PANEL_ID || 8);
 
 (async () => {
-  const browser = await launchBrowser();
+  const fixture = createRouteFixture('REMOTE-ENDPOINT');
+  const panelPortId = fixture.panelPortId;
+  const panelId = fixture.panelId;
+  let browser;
+  try {
+  browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errors = [];
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
@@ -32,7 +36,7 @@ const panelId = Number(process.env.GLPI_PANEL_ID || 8);
   const socketSelectorCount = await socketSelector.count();
   const mixedSelectorCount = await page.locator('select[name="rear_endpoint"]').count();
   await socketSelector.locator('xpath=following-sibling::span[contains(@class,"select2")]').click();
-  await page.locator('.select2-search__field').last().fill('HTL-L1');
+  await page.locator('.select2-search__field').last().fill(fixture.names.socket);
   await page.waitForTimeout(750);
   const socketOptions = await page.locator('.select2-results__option').count();
   await page.keyboard.press('Escape');
@@ -55,8 +59,6 @@ const panelId = Number(process.env.GLPI_PANEL_ID || 8);
     browser_errors: errors,
   };
   console.log(JSON.stringify(result, null, 2));
-  await browser.close();
-
   if (
     result.socket_selector_visible !== 1
     || result.socket_options < 1
@@ -66,5 +68,9 @@ const panelId = Number(process.env.GLPI_PANEL_ID || 8);
     || errors.length
   ) {
     process.exitCode = 1;
+  }
+  } finally {
+    if (browser) await browser.close();
+    cleanupRouteFixture(fixture);
   }
 })();

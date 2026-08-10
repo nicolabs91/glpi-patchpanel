@@ -79,7 +79,9 @@ npm run test:e2e
 The suite covers the visible GLPI menu entry, panel creation, socket endpoint
 handling, disconnect behavior, panel models, route search and impact views, CSV
 import and rollback, labels, audit history, database-model checks, health checks
-and WCAG 2.1 A/AA component checks.
+and WCAG 2.1 A/AA component checks. Tests create uniquely named GLPI endpoint,
+route and rack fixtures and remove them after each checkpoint; they do not rely
+on IDs or free rack positions from a shared demo database.
 
 Set `BROWSER=firefox` or use `npm run test:firefox` to run the same suite in
 Firefox.

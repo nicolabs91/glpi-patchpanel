@@ -99,6 +99,16 @@ checkpoint before relying on it in the UI.
   PatchPanel port. GLPI's `Connected to` field therefore shows the first
   physical hop; the rear socket's terminal device port is route data, not the
   native peer of the switch/router port.
+- Moving linked network equipment or one of its network ports to the trash
+  removes only that managed native relation and its PatchPanel front endpoint.
+  Restoring the object never reconnects it automatically: a physical cable
+  must be selected again. Unrelated native network links remain untouched.
+- This owner lifecycle applies to every GLPI item type that owns network
+  ports, including computers, printers and phones. Ports with a deleted or
+  missing owner are rejected by form, CSV and native `Connected to` writes.
+- Moving a patch panel to the trash releases its endpoints, managed native
+  links and panel-to-panel links while keeping the panel and port records
+  available for restore. Purging a GLPI socket removes its rear endpoint.
 - Preserve native GLPI cable links when editing a PatchPanel port and color
   fields.
 - Treat `NetworkPort` rows owned by `PluginPatchpanelPanelPort` as managed

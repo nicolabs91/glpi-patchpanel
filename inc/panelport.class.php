@@ -397,20 +397,116 @@ class PluginPatchpanelPanelPort extends CommonDBChild
             $counts[(int) $row['port_id']] = [
                 'endpoint_count' => (int) ($row['endpoint_count'] ?? 0),
                 'broken_count' => (int) ($row['broken_count'] ?? 0),
+                'front_count' => (int) ($row['front_count'] ?? 0),
+                'rear_terminal_count' => (int) ($row['rear_terminal_count'] ?? 0),
                 'complete_count' => min(
                     (int) ($row['rear_terminal_count'] ?? 0),
                     (int) ($row['front_count'] ?? 0)
                 ),
             ];
         }
+
+        foreach ($portIds as $portId) {
+            $counts[$portId] ??= [
+                'endpoint_count' => 0,
+                'broken_count' => 0,
+                'front_count' => 0,
+                'rear_terminal_count' => 0,
+                'complete_count' => 0,
+            ];
+        }
+
+        foreach ($DB->request([
+            'SELECT' => ['plugin_patchpanel_panelports_id', 'items_id'],
+            'FROM' => $endpointTable,
+            'WHERE' => [
+                'plugin_patchpanel_panelports_id' => $portIds,
+                'side' => PluginPatchpanelPortEndpoint::FRONT,
+                'itemtype' => NetworkPort::class,
+            ],
+        ]) as $frontEndpoint) {
+            $portId = (int) $frontEndpoint['plugin_patchpanel_panelports_id'];
+            $frontPortId = (int) $frontEndpoint['items_id'];
+            $networkPort = new NetworkPort();
+            if (
+                isset($counts[$portId])
+                && $networkPort->getFromDB($frontPortId)
+                && (int) ($networkPort->fields['is_deleted'] ?? 0) === 0
+                && !PluginPatchpanelPortEndpoint::isUsableFrontNetworkPortId($frontPortId)
+            ) {
+                $counts[$portId]['broken_count']++;
+                $counts[$portId]['front_count'] = max(0, $counts[$portId]['front_count'] - 1);
+                $counts[$portId]['complete_count'] = min(
+                    $counts[$portId]['rear_terminal_count'],
+                    $counts[$portId]['front_count']
+                );
+            }
+        }
+
+        $linkTable = PluginPatchpanelPanelPortLink::getTable();
+        $portTable = self::getTable();
+        $ids = implode(',', $portIds);
+        $linkSql = "SELECT l.panelports_id_a,
+                           l.panelports_id_b,
+                           pa.id AS port_a_exists,
+                           pb.id AS port_b_exists,
+                           npa.id AS front_a_exists,
+                           npb.id AS front_b_exists,
+                           fa.items_id AS front_a_id,
+                           fb.items_id AS front_b_id
+                    FROM `$linkTable` l
+                    LEFT JOIN `$portTable` pa ON pa.id = l.panelports_id_a
+                    LEFT JOIN `$portTable` pb ON pb.id = l.panelports_id_b
+                    LEFT JOIN `$endpointTable` fa
+                        ON fa.plugin_patchpanel_panelports_id = l.panelports_id_a
+                        AND fa.side = 'front'
+                        AND fa.itemtype = '$networkPortType'
+                    LEFT JOIN `glpi_networkports` npa
+                        ON npa.id = fa.items_id AND npa.is_deleted = 0
+                    LEFT JOIN `$endpointTable` fb
+                        ON fb.plugin_patchpanel_panelports_id = l.panelports_id_b
+                        AND fb.side = 'front'
+                        AND fb.itemtype = '$networkPortType'
+                    LEFT JOIN `glpi_networkports` npb
+                        ON npb.id = fb.items_id AND npb.is_deleted = 0
+                    WHERE l.is_active = 1
+                      AND (l.panelports_id_a IN ($ids) OR l.panelports_id_b IN ($ids))";
+        $linkResult = $DB->doQuery($linkSql);
+        while ($linkResult && ($link = $linkResult->fetch_assoc())) {
+            $complete = !empty($link['front_a_exists'])
+                && !empty($link['front_b_exists'])
+                && PluginPatchpanelPortEndpoint::isUsableFrontNetworkPortId((int) $link['front_a_id'])
+                && PluginPatchpanelPortEndpoint::isUsableFrontNetworkPortId((int) $link['front_b_id']);
+            $broken = empty($link['port_a_exists']) || empty($link['port_b_exists']);
+            foreach (['panelports_id_a', 'panelports_id_b'] as $side) {
+                $portId = (int) $link[$side];
+                if (!isset($counts[$portId])) {
+                    continue;
+                }
+                $counts[$portId]['endpoint_count']++;
+                $counts[$portId]['broken_count'] += (int) $broken;
+                $counts[$portId]['complete_count'] = max(
+                    $counts[$portId]['complete_count'],
+                    (int) $complete
+                );
+            }
+        }
         return $counts;
     }
 
     private static function getDisplayStatusFromRoute(array $fields, array $route): string
     {
-        $count = (int) isset($route['rear']) + (int) isset($route['front']);
+        if (!empty($route['has_broken_reference'])) {
+            return 'attention';
+        }
+        $count = (int) isset($route['rear'])
+            + (int) isset($route['front'])
+            + (int) isset($route['panel_link']);
         if ($count === 0) {
             return 'free';
+        }
+        if ($route['panel_link']) {
+            return $route['front'] && $route['peer_front'] ? 'connected' : 'partial';
         }
         return $route['rear'] && $route['front'] && $route['terminal'] ? 'connected' : 'partial';
     }
@@ -423,6 +519,9 @@ class PluginPatchpanelPanelPort extends CommonDBChild
     ): string {
         if ($endpointCount === 0) {
             return 'free';
+        }
+        if ($brokenCount > 0) {
+            return 'attention';
         }
         return $completeCount > 0 ? 'connected' : 'partial';
     }

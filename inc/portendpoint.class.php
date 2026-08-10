@@ -55,9 +55,7 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             self::REAR_SOCKET => __('Remote endpoint / connection point', 'patchpanel'),
             self::REAR_PANEL_PORT => __('Another patch panel port', 'patchpanel'),
         ], ['value' => $rearType]);
-        echo '</td><td colspan="2">' .
-            htmlescape(__('Choose the matching field below; the other selection is ignored.', 'patchpanel')) .
-            '</td></tr>';
+        echo '</td><td colspan="2"></td></tr>';
         echo "<tr class='tab_bg_1'><td>" . __('Remote endpoint / connection point', 'patchpanel') . "</td><td>";
         Dropdown::show('Glpi\\Socket', [
             'name' => 'rear_items_id',
@@ -504,6 +502,107 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         }
     }
 
+    public static function cleanupFrontEndpointsAfterOwnerSoftDelete(CommonDBTM $item): void
+    {
+        global $DB;
+
+        if ((int) $item->getID() <= 0 || (int) ($item->fields['is_deleted'] ?? 0) === 0) {
+            return;
+        }
+
+        $portIds = [];
+        foreach ($DB->request([
+            'SELECT' => ['id'],
+            'FROM' => NetworkPort::getTable(),
+            'WHERE' => [
+                'itemtype' => $item->getType(),
+                'items_id' => (int) $item->getID(),
+            ],
+        ]) as $row) {
+            $portIds[] = (int) $row['id'];
+        }
+        self::cleanupFrontEndpointsForNetworkPorts($portIds);
+    }
+
+    public static function cleanupFrontEndpointAfterPortSoftDelete(CommonDBTM $item): void
+    {
+        if (!$item instanceof NetworkPort || (int) ($item->fields['is_deleted'] ?? 0) === 0) {
+            return;
+        }
+        self::cleanupFrontEndpointsForNetworkPorts([(int) $item->getID()]);
+    }
+
+    public static function cleanupRearEndpointAfterSocketPurge(CommonDBTM $item): void
+    {
+        global $DB;
+
+        if (!$item instanceof \Glpi\Socket || (int) $item->getID() <= 0) {
+            return;
+        }
+        $DB->delete(self::getTable(), [
+            'side' => self::REAR,
+            'itemtype' => \Glpi\Socket::class,
+            'items_id' => (int) $item->getID(),
+        ]);
+    }
+
+    public static function cleanupConnectionsForPanelSoftDelete(int $panelId): void
+    {
+        global $DB;
+
+        $panelPortIds = [];
+        foreach ($DB->request([
+            'SELECT' => ['id'],
+            'FROM' => PluginPatchpanelPanelPort::getTable(),
+            'WHERE' => ['plugin_patchpanel_panels_id' => $panelId],
+        ]) as $row) {
+            $panelPortIds[] = (int) $row['id'];
+        }
+        foreach ($panelPortIds as $panelPortId) {
+            PluginPatchpanelPanelPortLink::deleteForPanelPort($panelPortId);
+            $endpoints = self::getForPort($panelPortId);
+            if (isset($endpoints[self::FRONT])) {
+                self::clearNativeNetworkPortLink([
+                    'panel_port' => $panelPortId,
+                    'rear_port' => 0,
+                    'front_port' => (int) ($endpoints[self::FRONT]['items_id'] ?? 0),
+                ]);
+                self::recordNativeDisconnectAudit($panelPortId, $endpoints[self::FRONT]);
+            }
+        }
+        if ($panelPortIds) {
+            $DB->delete(self::getTable(), ['plugin_patchpanel_panelports_id' => $panelPortIds]);
+        }
+    }
+
+    private static function cleanupFrontEndpointsForNetworkPorts(array $networkPortIds): void
+    {
+        global $DB;
+
+        $networkPortIds = array_values(array_unique(array_filter(array_map('intval', $networkPortIds))));
+        if (!$networkPortIds) {
+            return;
+        }
+
+        foreach ($DB->request([
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'side' => self::FRONT,
+                'itemtype' => NetworkPort::class,
+                'items_id' => $networkPortIds,
+            ],
+        ]) as $frontEndpoint) {
+            $panelPortId = (int) ($frontEndpoint['plugin_patchpanel_panelports_id'] ?? 0);
+            self::clearNativeNetworkPortLink([
+                'panel_port' => $panelPortId,
+                'rear_port' => 0,
+                'front_port' => (int) ($frontEndpoint['items_id'] ?? 0),
+            ]);
+            $DB->delete(self::getTable(), ['id' => (int) $frontEndpoint['id']]);
+            self::recordNativeDisconnectAudit($panelPortId, $frontEndpoint);
+        }
+    }
+
     public static function syncFrontEndpointAfterNativeNetworkPortConnect(CommonDBTM $item): void
     {
         if (!$item instanceof NetworkPort_NetworkPort) {
@@ -521,16 +620,114 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
             return;
         }
 
-        foreach ([[0, 1], [1, 0]] as [$targetIndex, $frontIndex]) {
-            $targetPortId = $portIds[$targetIndex];
-            $frontPortId = $portIds[$frontIndex];
-            foreach (self::getPanelPortIdsForNativeTarget($targetPortId) as $panelPortId) {
-                if ($targetPortId !== self::getExpectedNativeTargetForPanelPort($panelPortId)) {
-                    continue;
-                }
-                self::replaceFrontEndpointFromNativeLink($panelPortId, $frontPortId);
+        $nativePorts = [];
+        foreach ($portIds as $portId) {
+            $networkPort = new NetworkPort();
+            if (!$networkPort->getFromDB($portId)) {
+                self::rollbackInvalidNativeNetworkPortLink($item);
+                return;
+            }
+            $nativePorts[] = $networkPort;
+        }
+
+        $shadowIndexes = [];
+        foreach ($nativePorts as $index => $networkPort) {
+            if ((string) ($networkPort->fields['itemtype'] ?? '') === PluginPatchpanelPanelPort::class) {
+                $shadowIndexes[] = $index;
             }
         }
+        if (!$shadowIndexes) {
+            return;
+        }
+
+        // PatchPanel shadow ports are implementation details. A native link is
+        // valid only between exactly one active shadow and one real GLPI port.
+        if (count($shadowIndexes) !== 1) {
+            self::rollbackInvalidNativeNetworkPortLink($item);
+            return;
+        }
+
+        $targetIndex = $shadowIndexes[0];
+        $frontIndex = $targetIndex === 0 ? 1 : 0;
+        $panelPortId = (int) ($nativePorts[$targetIndex]->fields['items_id'] ?? 0);
+        if (
+            !self::isActivePanelPort($panelPortId)
+            || !self::canUseNativePortAsFrontEndpoint($portIds[$frontIndex])
+            || $portIds[$targetIndex] !== self::getExpectedNativeTargetForPanelPort($panelPortId)
+        ) {
+            self::rollbackInvalidNativeNetworkPortLink($item);
+            return;
+        }
+
+        self::replaceFrontEndpointFromNativeLink($panelPortId, $portIds[$frontIndex]);
+    }
+
+    private static function rollbackInvalidNativeNetworkPortLink(NetworkPort_NetworkPort $item): void
+    {
+        global $DB;
+
+        $relationId = (int) $item->getID();
+        if ($relationId > 0) {
+            $DB->delete(NetworkPort_NetworkPort::getTable(), ['id' => $relationId]);
+            if (countElementsInTable(NetworkPort_NetworkPort::getTable(), ['id' => $relationId])) {
+                throw new RuntimeException('Invalid native PatchPanel relation rollback failed');
+            }
+            return;
+        }
+
+        $portIds = array_values(array_filter([
+            (int) ($item->fields['networkports_id_1'] ?? 0),
+            (int) ($item->fields['networkports_id_2'] ?? 0),
+        ]));
+        if (count($portIds) === 2) {
+            $DB->delete(NetworkPort_NetworkPort::getTable(), [
+                'OR' => [
+                    [
+                        'networkports_id_1' => $portIds[0],
+                        'networkports_id_2' => $portIds[1],
+                    ],
+                    [
+                        'networkports_id_1' => $portIds[1],
+                        'networkports_id_2' => $portIds[0],
+                    ],
+                ],
+            ]);
+            $remaining = $DB->request([
+                'FROM' => NetworkPort_NetworkPort::getTable(),
+                'WHERE' => [
+                    'OR' => [
+                        [
+                            'networkports_id_1' => $portIds[0],
+                            'networkports_id_2' => $portIds[1],
+                        ],
+                        [
+                            'networkports_id_1' => $portIds[1],
+                            'networkports_id_2' => $portIds[0],
+                        ],
+                    ],
+                ],
+                'LIMIT' => 1,
+            ])->count();
+            if ($remaining) {
+                throw new RuntimeException('Invalid native PatchPanel relation rollback failed');
+            }
+        }
+    }
+
+    private static function isActivePanelPort(int $panelPortId): bool
+    {
+        if ($panelPortId <= 0) {
+            return false;
+        }
+
+        $panelPort = new PluginPatchpanelPanelPort();
+        if (!$panelPort->getFromDB($panelPortId)) {
+            return false;
+        }
+
+        $panel = new PluginPatchpanelPanel();
+        return $panel->getFromDB((int) ($panelPort->fields['plugin_patchpanel_panels_id'] ?? 0))
+            && (int) ($panel->fields['is_deleted'] ?? 0) === 0;
     }
 
     private static function clearSocketDeviceFields(\Glpi\Socket $socket): bool
@@ -744,10 +941,27 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
 
     private static function canUseNativePortAsFrontEndpoint(int $networkPortId): bool
     {
+        return self::isUsableFrontNetworkPortId($networkPortId);
+    }
+
+    public static function isUsableFrontNetworkPortId(int $networkPortId): bool
+    {
         $networkPort = new NetworkPort();
-        return $networkPort->getFromDB($networkPortId)
-            && (int) ($networkPort->fields['is_deleted'] ?? 0) === 0
-            && (string) ($networkPort->fields['itemtype'] ?? '') !== PluginPatchpanelPanelPort::class;
+        if (
+            !$networkPort->getFromDB($networkPortId)
+            || (int) ($networkPort->fields['is_deleted'] ?? 0) !== 0
+            || (string) ($networkPort->fields['itemtype'] ?? '') === PluginPatchpanelPanelPort::class
+        ) {
+            return false;
+        }
+        $ownerType = (string) ($networkPort->fields['itemtype'] ?? '');
+        $ownerId = (int) ($networkPort->fields['items_id'] ?? 0);
+        if (!class_exists($ownerType) || !is_a($ownerType, CommonDBTM::class, true) || $ownerId <= 0) {
+            return false;
+        }
+        $owner = new $ownerType();
+        return $owner->getFromDB($ownerId)
+            && (!array_key_exists('is_deleted', $owner->fields) || (int) $owner->fields['is_deleted'] === 0);
     }
 
     private static function syncNativeNetworkPortLink(array $oldLink, array $endpoints): void
@@ -986,8 +1200,8 @@ class PluginPatchpanelPortEndpoint extends CommonDBTM
         if (!$item->getFromDB($itemsId) || !$item->canViewItem()) {
             throw new InvalidArgumentException(__('The selected endpoint does not exist or is inaccessible.', 'patchpanel'));
         }
-        if ($item instanceof NetworkPort && (int) ($item->fields['is_deleted'] ?? 0) !== 0) {
-            throw new InvalidArgumentException(__('The selected network port is deleted.', 'patchpanel'));
+        if ($item instanceof NetworkPort && !self::isUsableFrontNetworkPortId($itemsId)) {
+            throw new InvalidArgumentException(__('The selected network port or its owner is deleted.', 'patchpanel'));
         }
 
         $used = $DB->request([

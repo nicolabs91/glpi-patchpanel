@@ -1,70 +1,12 @@
 const { launchBrowser } = require('./helpers');
-const { execFileSync } = require('child_process');
+const {
+  cleanupRouteFixture,
+  createRouteFixture,
+} = require('./fixtures');
 
 const baseUrl = process.env.GLPI_URL || 'http://127.0.0.1:8088';
 const username = process.env.GLPI_USER || 'glpi';
 const password = process.env.GLPI_PASSWORD || 'glpi';
-
-const TEST_PANEL_PORT_ID = 2605;
-const TEST_SOCKET_ID = 86;
-const TEST_SOCKET_PORT_ID = 217;
-const TEST_FRONT_PORT_ID = 224;
-const TEST_ACCESS_SWITCH_ID = 21;
-const TEST_PANEL_NAME = 'PP-L1-IDF-A - Guest room outlets 0101-0124';
-
-function queryDb(sql) {
-  return execFileSync('docker', [
-    'exec',
-    'glpi-db',
-    'mariadb',
-    '-uglpi',
-    `-p${process.env.GLPI_DB_PASSWORD || 'glpi'}`,
-    'glpi',
-    '-N',
-    '-e',
-    sql,
-  ], { encoding: 'utf8' }).trim();
-}
-
-function resetAp001Route() {
-  queryDb(
-    `UPDATE glpi_sockets
-     SET itemtype = 'NetworkEquipment', items_id = 1, networkports_id = ${TEST_SOCKET_PORT_ID}
-     WHERE id = ${TEST_SOCKET_ID}`
-  );
-  queryDb(
-    `DELETE FROM glpi_networkports_networkports
-     WHERE networkports_id_1 IN (${TEST_SOCKET_PORT_ID}, ${TEST_FRONT_PORT_ID})
-        OR networkports_id_2 IN (${TEST_SOCKET_PORT_ID}, ${TEST_FRONT_PORT_ID})`
-  );
-  queryDb(
-    `INSERT INTO glpi_networkports_networkports (networkports_id_1, networkports_id_2)
-     SELECT ${TEST_FRONT_PORT_ID}, id
-     FROM glpi_networkports
-     WHERE itemtype = 'PluginPatchpanelPanelPort'
-       AND items_id = ${TEST_PANEL_PORT_ID}
-       AND is_deleted = 0
-     LIMIT 1`
-  );
-  queryDb(
-    `DELETE FROM glpi_plugin_patchpanel_portendpoints
-     WHERE itemtype = 'Glpi\\\\Socket'
-       AND items_id = ${TEST_SOCKET_ID}
-       AND plugin_patchpanel_panelports_id <> ${TEST_PANEL_PORT_ID}`
-  );
-  queryDb(
-    `DELETE FROM glpi_plugin_patchpanel_portendpoints
-     WHERE plugin_patchpanel_panelports_id = ${TEST_PANEL_PORT_ID}`
-  );
-  queryDb(
-    `INSERT INTO glpi_plugin_patchpanel_portendpoints
-       (plugin_patchpanel_panelports_id, side, itemtype, items_id, cables_id,
-        cable_color, cable_label, date_mod, date_creation)
-     VALUES
-       (${TEST_PANEL_PORT_ID}, 'rear', 'Glpi\\\\Socket', ${TEST_SOCKET_ID}, 0, NULL, NULL, NOW(), NOW()),
-       (${TEST_PANEL_PORT_ID}, 'front', 'NetworkPort', ${TEST_FRONT_PORT_ID}, 0, NULL, NULL, NOW(), NOW())`
-  );
-}
 
 async function login(page) {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -95,7 +37,11 @@ function comparableSteps(steps) {
 }
 
 (async () => {
-  resetAp001Route();
+  const fixture = createRouteFixture('ROUTE-CONSISTENCY');
+  const TEST_PANEL_PORT_ID = fixture.panelPortId;
+  const TEST_SOCKET_PORT_ID = fixture.endpointPortId;
+  const TEST_ACCESS_SWITCH_ID = fixture.accessSwitchId;
+  const TEST_PANEL_NAME = fixture.names.panel;
 
   const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 1700, height: 1200 } });
@@ -186,11 +132,11 @@ function comparableSteps(steps) {
       && serialized.port === serialized.impact;
 
     const expectedOrder = [
-      'NLH-R0101-TV01 - Guest room television · eth0 - NLH-R0101-TV01',
-      'NLH-R0101-WA-TV01 - Room 0101 TV wall outlet',
+      `${fixture.names.endpoint} · ${fixture.names.endpointPort}`,
+      fixture.names.socket,
       TEST_PANEL_NAME,
-      'Patch port 01',
-      'NLH-F01-IDF-A-SW01 01',
+      fixture.names.panelPort,
+      `${fixture.names.accessSwitch} · ${fixture.names.frontPort}`,
     ];
 
     const result = {
@@ -208,13 +154,13 @@ function comparableSteps(steps) {
         expectedOrder.every((label, index) => portComparable[index]?.text === label),
       endpoint_not_repeated_as_upstream:
         !portComparable.slice(5).some(step =>
-          step.href === '/front/networkequipment.form.php?id=1'
-          || step.text.includes('NLH-R0101-TV01')
+          step.href === `/front/networkequipment.form.php?id=${fixture.endpointId}`
+          || step.text.includes(fixture.names.endpoint)
         ),
       downlinks_not_misclassified_as_upstream:
         !portComparable.slice(5).some(step =>
-          step.text.includes('Guest room television')
-          || step.href === '/front/networkequipment.form.php?id=3'
+          step.text.includes(fixture.names.endpoint)
+          || step.href === `/front/networkequipment.form.php?id=${fixture.endpointId}`
         ),
       impact_href: impactHref,
       port_steps: portComparable,
@@ -240,7 +186,7 @@ function comparableSteps(steps) {
     }
   } finally {
     await browser.close();
-    resetAp001Route();
+    cleanupRouteFixture(fixture);
   }
 })().catch(error => {
   console.error(error);

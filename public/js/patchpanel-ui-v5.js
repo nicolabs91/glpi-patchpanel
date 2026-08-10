@@ -52,6 +52,34 @@
     return Number.parseInt(field?.value || '0', 10) || 0;
   }
 
+  function bindRearConnectionForms(root = document) {
+    const forms = Array.from(root.querySelectorAll?.('form') || []);
+    if (root instanceof HTMLFormElement) {
+      forms.push(root);
+    }
+
+    forms.forEach((form) => {
+      const rearType = form.querySelector('select[name="rear_endpoint_type"]');
+      const rearSocket = form.querySelector('select[name="rear_items_id"]');
+      const rearPanelPort = form.querySelector('select[name="rear_panelport_id"]');
+      if (!rearType || !rearSocket || !rearPanelPort || rearPanelPort.dataset.patchpanelRearTypeBound === '1') {
+        return;
+      }
+
+      rearPanelPort.dataset.patchpanelRearTypeBound = '1';
+      rearPanelPort.addEventListener('change', () => {
+        if (getSelectedNumber(rearPanelPort) > 0) {
+          setSelectValue(form, 'rear_endpoint_type', 'panel_port');
+        }
+      });
+      rearSocket.addEventListener('change', () => {
+        if (getSelectedNumber(rearSocket) > 0) {
+          setSelectValue(form, 'rear_endpoint_type', 'socket');
+        }
+      });
+    });
+  }
+
   async function keepPatchPanelInsideRack(form) {
     const itemType = form.querySelector('select[name="itemtype"]');
     const item = form.querySelector('select[name="items_id"]');
@@ -154,6 +182,7 @@
   async function boot() {
     hideManagedShadowPortLinks();
     bindRackPlacementForms();
+    bindRearConnectionForms();
     let rescanScheduled = false;
     new MutationObserver(() => {
       if (rescanScheduled) {
@@ -167,6 +196,7 @@
         // handled even when they arrived in separate DOM updates.
         hideManagedShadowPortLinks(document);
         bindRackPlacementForms(document);
+        bindRearConnectionForms(document);
       });
     }).observe(document.body, { childList: true, subtree: true });
 
