@@ -9,6 +9,7 @@ const checkpoints = [
   'link_disconnect_checkpoint.js',
   'second_checkpoint.js',
   'route_explorer_checkpoint.js',
+  'native_impact_checkpoint.js',
   'csv_import_checkpoint.js',
   'labels_checkpoint.js',
   'audit_checkpoint.js',

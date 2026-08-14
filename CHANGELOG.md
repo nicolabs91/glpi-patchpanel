@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0-beta.1 - 2026-08-14
+
+- Synchronize physical PatchPanel device dependencies with GLPI's native
+  Impact analysis and rebuild them automatically when routes change.
+- Track automatic relation ownership in a plugin-owned table, preserving
+  manually maintained GLPI impact relations during rebuilds and uninstall.
+- Make synchronization transactional, serialized for concurrent requests and
+  independent of the triggering user's active entity scope.
+- Support every GLPI asset type enabled for native impact analysis, including
+  full firewall, core, access and endpoint dependency chains.
+- Repair the official GLPI 11 impact-relation label column when an incomplete
+  installation is detected, without extending the core schema with
+  plugin-specific fields.
+- Add health diagnostics for missing ownership indexes, orphan ownership rows
+  and incomplete native impact relations.
+- Add focused lifecycle, idempotency, multi-entity, manual-relation preservation
+  and native Impact graph regression coverage in PHP, Chromium and Firefox.
+
 ## 0.2.1 - 2026-08-10
 
 - Show hotel access-point routes with the unique device name followed by the

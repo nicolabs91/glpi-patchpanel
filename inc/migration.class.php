@@ -171,6 +171,20 @@ CREATE TABLE `glpi_plugin_patchpanel_importchanges` (
   KEY `port_id` (`plugin_patchpanel_panelports_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL,
+            'glpi_plugin_patchpanel_impactrelations' => <<<'SQL'
+CREATE TABLE `glpi_plugin_patchpanel_impactrelations` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `impactrelations_id` int unsigned NOT NULL,
+  `itemtype_source` varchar(255) NOT NULL,
+  `items_id_source` int unsigned NOT NULL,
+  `itemtype_impacted` varchar(255) NOT NULL,
+  `items_id_impacted` int unsigned NOT NULL,
+  `date_creation` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `impact_relation` (`impactrelations_id`),
+  UNIQUE KEY `managed_edge` (`itemtype_source`,`items_id_source`,`itemtype_impacted`,`items_id_impacted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
         ];
 
         foreach ($queries as $table => $query) {
@@ -179,11 +193,87 @@ SQL,
             }
         }
 
+        self::repairMissingGlpi11ImpactRelationName();
         self::upgradePanelModelTable();
         self::upgradeMigrationTable();
         self::migrateExperimentalPanelPortLinks();
+        self::migrateExperimentalNamedImpactRelations();
         self::seedModels();
         self::repairLegacyRackRelations();
+    }
+
+    /**
+     * GLPI 11's runtime reads this field and its official 10-to-11 migration
+     * creates it, but some fresh 11 schema bundles omit it.
+     */
+    private static function repairMissingGlpi11ImpactRelationName(): void
+    {
+        global $DB;
+
+        $table = class_exists(ImpactRelation::class)
+            ? ImpactRelation::getTable()
+            : 'glpi_impactrelations';
+        if (
+            defined('GLPI_VERSION')
+            && version_compare(GLPI_VERSION, '11.0.0', '>=')
+            && $DB->tableExists($table)
+            && !$DB->fieldExists($table, 'name')
+        ) {
+            $DB->doQuery(
+                "ALTER TABLE `$table`
+                 ADD `name` varchar(255) NOT NULL DEFAULT '' AFTER `id`,
+                 ADD KEY `name` (`name`)"
+            );
+            $DB->clearSchemaCache();
+        }
+    }
+
+    /**
+     * Adopt relations created by the unreleased experiment on databases where
+     * its non-standard core-table marker column was applied manually.
+     */
+    private static function migrateExperimentalNamedImpactRelations(): void
+    {
+        global $DB;
+
+        $impactTable = class_exists(ImpactRelation::class)
+            ? ImpactRelation::getTable()
+            : 'glpi_impactrelations';
+        $managedTable = 'glpi_plugin_patchpanel_impactrelations';
+        if (
+            !$DB->tableExists($impactTable)
+            || !$DB->tableExists($managedTable)
+            || !$DB->fieldExists($impactTable, 'name')
+        ) {
+            return;
+        }
+
+        foreach ($DB->request([
+            'FROM' => $impactTable,
+            'WHERE' => ['name' => ['LIKE', 'PatchPanel automatic route: %']],
+        ]) as $relation) {
+            $edge = [
+                'impactrelations_id' => (int) $relation['id'],
+                'itemtype_source' => (string) $relation['itemtype_source'],
+                'items_id_source' => (int) $relation['items_id_source'],
+                'itemtype_impacted' => (string) $relation['itemtype_impacted'],
+                'items_id_impacted' => (int) $relation['items_id_impacted'],
+            ];
+            if (
+                countElementsInTable($managedTable, [
+                    'impactrelations_id' => $edge['impactrelations_id'],
+                ]) === 0
+                && countElementsInTable($managedTable, [
+                    'itemtype_source' => $edge['itemtype_source'],
+                    'items_id_source' => $edge['items_id_source'],
+                    'itemtype_impacted' => $edge['itemtype_impacted'],
+                    'items_id_impacted' => $edge['items_id_impacted'],
+                ]) === 0
+            ) {
+                $edge['date_creation'] = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+                $DB->insert($managedTable, $edge);
+            }
+        }
     }
 
     /**

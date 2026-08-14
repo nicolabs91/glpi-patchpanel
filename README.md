@@ -30,6 +30,11 @@ switch/router port belong together.
   or firewall/router.
 - Show which patch-panel routes depend on a GLPI network equipment item or
   network port.
+- Synchronize device-to-device physical dependencies into GLPI's native
+  **Impact analysis** tab. PatchPanel-managed relations are recalculated from
+  current routes and do not overwrite manually maintained GLPI relations. A
+  plugin-owned bookkeeping table tracks ownership without altering GLPI's core
+  impact schema; all impact-enabled endpoint asset types are supported.
 - Place patch panels in GLPI racks through GLPI's native rack placement.
 - Generate printable labels with QR codes for a continuous port range.
 - Record route-affecting manual edits, CSV imports and CSV rollbacks in an audit
@@ -44,7 +49,7 @@ Administrative tools are available from the plugin settings page:
 
 ## Compatibility
 
-PatchPanel `0.2.1` targets GLPI 11 and PHP 8.2 or newer.
+PatchPanel `0.3.0-beta.1` targets GLPI 11 and PHP 8.2 or newer.
 
 ## Installation and upgrade
 

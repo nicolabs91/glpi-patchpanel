@@ -8,6 +8,16 @@ final class PluginPatchpanelRoute extends CommonGLPI
     private static array $routerFirewallCache = [];
     private static array $infrastructureEquipmentCache = [];
 
+    /** Clear request-local route caches after a background graph rebuild. */
+    public static function clearCaches(): void
+    {
+        self::$referenceStepCache = [];
+        self::$ownerStepCache = [];
+        self::$networkEquipmentNeighboursCache = [];
+        self::$routerFirewallCache = [];
+        self::$infrastructureEquipmentCache = [];
+    }
+
     public static function getTypeName($nb = 0): string
     {
         return __('Physical route', 'patchpanel');

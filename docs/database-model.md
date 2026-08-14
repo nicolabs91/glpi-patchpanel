@@ -34,6 +34,13 @@ A physical route is built from these records:
    - Upstream route discovery follows GLPI `glpi_networkports_networkports`
      links between `NetworkEquipment` ports toward a router, firewall, or
      gateway.
+6. `glpi_plugin_patchpanel_impactrelations`
+   - Records ownership of native `glpi_impactrelations` generated from physical
+     routes; it does not duplicate GLPI's impact graph.
+   - `impactrelations_id` is unique, so only relations explicitly owned by
+     PatchPanel can be updated or removed automatically.
+   - The four source/impacted item columns form a unique managed edge and make
+     synchronization idempotent.
 
 This means PatchPanel should never duplicate GLPI device ownership,
 network-port ownership, socket-device assignment, rack placement, locations, or
@@ -63,6 +70,12 @@ PatchPanel depends on these index shapes:
   - Used to find sockets directly attached to a GLPI object.
 - `glpi_sockets.networkports_id`
   - Used to find sockets attached through a GLPI network port.
+- `glpi_plugin_patchpanel_impactrelations.impact_relation`
+  - `(impactrelations_id)`
+  - Protects one-to-one ownership of a native GLPI impact relation.
+- `glpi_plugin_patchpanel_impactrelations.managed_edge`
+  - `(itemtype_source, items_id_source, itemtype_impacted, items_id_impacted)`
+  - Prevents duplicate automatically managed dependencies.
 
 If a future feature adds a new lookup direction, add the index and a database
 checkpoint before relying on it in the UI.
@@ -111,6 +124,8 @@ checkpoint before relying on it in the UI.
   available for restore. Purging a GLPI socket removes its rear endpoint.
 - Preserve native GLPI cable links when editing a PatchPanel port and color
   fields.
+- Preserve manually created native GLPI impact relations. Automatic rebuilds
+  may mutate or remove only relations listed in PatchPanel's ownership table.
 - Treat `NetworkPort` rows owned by `PluginPatchpanelPanelPort` as managed
   shadow records: remove them before deleting their panel port and report any
   orphan shadow rows in the health check.

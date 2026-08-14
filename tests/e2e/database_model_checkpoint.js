@@ -44,6 +44,8 @@ const expectedIndexes = [
   ['glpi_plugin_patchpanel_portendpoints', 'endpoint', ['itemtype', 'items_id']],
   ['glpi_plugin_patchpanel_panelports', 'panel_number', ['plugin_patchpanel_panels_id', 'number']],
   ['glpi_plugin_patchpanel_panelports', 'panel_layout', ['plugin_patchpanel_panels_id', 'row', 'position']],
+  ['glpi_plugin_patchpanel_impactrelations', 'impact_relation', ['impactrelations_id']],
+  ['glpi_plugin_patchpanel_impactrelations', 'managed_edge', ['itemtype_source', 'items_id_source', 'itemtype_impacted', 'items_id_impacted']],
   ['glpi_networkports', 'item', ['itemtype', 'items_id']],
   ['glpi_sockets', 'item', ['itemtype', 'items_id']],
   ['glpi_sockets', 'networkports_id', ['networkports_id']],
@@ -154,6 +156,18 @@ const activeImportBatchesWithoutChanges = scalar(`
   HAVING COUNT(c.id) = 0
 `, 'count');
 
+const staleManagedImpactRelations = scalar(`
+  SELECT COUNT(*) AS count
+  FROM glpi_plugin_patchpanel_impactrelations managed
+  LEFT JOIN glpi_impactrelations native
+    ON native.id = managed.impactrelations_id
+   AND native.itemtype_source = managed.itemtype_source
+   AND native.items_id_source = managed.items_id_source
+   AND native.itemtype_impacted = managed.itemtype_impacted
+   AND native.items_id_impacted = managed.items_id_impacted
+  WHERE native.id IS NULL
+`, 'count');
+
 const result = {
   indexes: indexResults,
   integrity: {
@@ -168,6 +182,7 @@ const result = {
     invalidPanelPortStateOrMedia,
     invalidLayoutNumbers,
     activeImportBatchesWithoutChanges,
+    staleManagedImpactRelations,
   },
 };
 
@@ -186,6 +201,7 @@ if (
   || invalidPanelPortStateOrMedia !== 0
   || invalidLayoutNumbers !== 0
   || activeImportBatchesWithoutChanges !== 0
+  || staleManagedImpactRelations !== 0
 ) {
   process.exitCode = 1;
 }

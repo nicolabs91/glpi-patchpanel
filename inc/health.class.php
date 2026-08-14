@@ -11,6 +11,8 @@ final class PluginPatchpanelHealth
         ['glpi_plugin_patchpanel_panelportlinks', 'panelports_id_a', ['panelports_id_a']],
         ['glpi_plugin_patchpanel_panelportlinks', 'panelports_id_b', ['panelports_id_b']],
         ['glpi_plugin_patchpanel_panelportlinks', 'is_active', ['is_active']],
+        ['glpi_plugin_patchpanel_impactrelations', 'impact_relation', ['impactrelations_id']],
+        ['glpi_plugin_patchpanel_impactrelations', 'managed_edge', ['itemtype_source', 'items_id_source', 'itemtype_impacted', 'items_id_impacted']],
         ['glpi_networkports', 'item', ['itemtype', 'items_id']],
         ['glpi_sockets', 'item', ['itemtype', 'items_id']],
         ['glpi_sockets', 'networkports_id', ['networkports_id']],
@@ -98,6 +100,19 @@ final class PluginPatchpanelHealth
     private static function checkIntegrity(): array
     {
         return [
+            self::countCheck(
+                __('Managed impact relations without a matching GLPI relation', 'patchpanel'),
+                "SELECT COUNT(*) AS count
+                 FROM glpi_plugin_patchpanel_impactrelations managed
+                 LEFT JOIN glpi_impactrelations native
+                   ON native.id = managed.impactrelations_id
+                  AND native.itemtype_source = managed.itemtype_source
+                  AND native.items_id_source = managed.items_id_source
+                  AND native.itemtype_impacted = managed.itemtype_impacted
+                  AND native.items_id_impacted = managed.items_id_impacted
+                 WHERE native.id IS NULL",
+                __('Run PatchPanel impact synchronization to repair stale ownership records.', 'patchpanel')
+            ),
             self::countCheck(
                 __('Endpoint rows without a panel port', 'patchpanel'),
                 "SELECT COUNT(*) AS count

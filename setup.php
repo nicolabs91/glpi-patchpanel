@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
     die('Direct access is not allowed');
 }
 
-define('PLUGIN_PATCHPANEL_VERSION', '0.2.1');
+define('PLUGIN_PATCHPANEL_VERSION', '0.3.0-beta.1');
 define('PLUGIN_PATCHPANEL_MIN_GLPI', '11.0.0');
 define('PLUGIN_PATCHPANEL_MAX_GLPI', '11.99.99');
 
@@ -29,6 +29,7 @@ function plugin_init_patchpanel(): void
     Plugin::registerClass('PluginPatchpanelLabel');
     Plugin::registerClass('PluginPatchpanelAudit');
     Plugin::registerClass('PluginPatchpanelMigration');
+    Plugin::registerClass('PluginPatchpanelImpact');
 
     if (!in_array('PluginPatchpanelPanel', $CFG_GLPI['rackable_types'] ?? [], true)) {
         $CFG_GLPI['rackable_types'][] = 'PluginPatchpanelPanel';
@@ -59,6 +60,19 @@ function plugin_init_patchpanel(): void
         = 'plugin_patchpanel_cleanup_front_endpoint_after_port_soft_delete';
     $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][\Glpi\Socket::class]
         = 'plugin_patchpanel_cleanup_rear_endpoint_after_socket_purge';
+    foreach ([
+        PluginPatchpanelPanel::class,
+        PluginPatchpanelPanelPortLink::class,
+    ] as $routeItemType) {
+        $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_ADD]['patchpanel'][$routeItemType]
+            = 'plugin_patchpanel_sync_impact_relations';
+        $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_UPDATE]['patchpanel'][$routeItemType]
+            = 'plugin_patchpanel_sync_impact_relations';
+        $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][$routeItemType]
+            = 'plugin_patchpanel_sync_impact_relations';
+    }
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_PURGE]['patchpanel'][PluginPatchpanelPanelPort::class]
+        = 'plugin_patchpanel_sync_impact_relations';
     $PLUGIN_HOOKS['add_css']['patchpanel'] = 'public/css/patchpanel.css';
     $PLUGIN_HOOKS['add_javascript']['patchpanel'] = 'public/js/patchpanel-ui-v5.js';
 }

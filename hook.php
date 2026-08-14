@@ -4,12 +4,16 @@ function plugin_patchpanel_install(): bool
 {
     PluginPatchpanelMigration::installSchema();
     PluginPatchpanelPortEndpoint::synchronizeAllNativeNetworkPortLinks();
-    return true;
+    return PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_uninstall(): bool
 {
     global $DB;
+
+    if (!PluginPatchpanelImpact::removeManagedRelations()) {
+        return false;
+    }
 
     // Old third-party PatchPanel tables are deliberately excluded. Removing
     // data outside this replacement plugin should stay an explicit DB action.
@@ -23,6 +27,7 @@ function plugin_patchpanel_uninstall(): bool
         'glpi_plugin_patchpanel_audits',
         'glpi_plugin_patchpanel_importchanges',
         'glpi_plugin_patchpanel_importbatches',
+        'glpi_plugin_patchpanel_impactrelations',
     ] as $table) {
         if ($DB->tableExists($table)) {
             $DB->doQuery("DROP TABLE `$table`");
@@ -63,35 +68,47 @@ function plugin_patchpanel_getDropdown(): array
 function plugin_patchpanel_cleanup_socket_device_selection_when_port_is_empty(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupSocketDeviceSelectionWhenPortIsEmpty($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_sync_socket_native_network_link(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupSocketDeviceSelectionWhenPortIsEmpty($item);
     PluginPatchpanelPortEndpoint::synchronizeNativeNetworkPortLinksForSocket($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_sync_front_endpoint_after_native_connect(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::syncFrontEndpointAfterNativeNetworkPortConnect($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_cleanup_front_endpoint_after_native_disconnect(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupFrontEndpointAfterNativeNetworkPortDisconnect($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_cleanup_front_endpoints_after_owner_soft_delete(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupFrontEndpointsAfterOwnerSoftDelete($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_cleanup_front_endpoint_after_port_soft_delete(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupFrontEndpointAfterPortSoftDelete($item);
+    PluginPatchpanelImpact::synchronize();
 }
 
 function plugin_patchpanel_cleanup_rear_endpoint_after_socket_purge(CommonDBTM $item): void
 {
     PluginPatchpanelPortEndpoint::cleanupRearEndpointAfterSocketPurge($item);
+    PluginPatchpanelImpact::synchronize();
+}
+
+function plugin_patchpanel_sync_impact_relations(CommonDBTM $item): void
+{
+    PluginPatchpanelImpact::synchronize();
 }
